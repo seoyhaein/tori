@@ -2,11 +2,6 @@
 - https://github.com/mattn/go-sqlite3
 - DDL 설정 필요. notion 참고.
 
-
-## old
-
-# datablock (Packrat 라고 이름 바꾸는 것을 생각해보자. blocky 는 이미 있음. 그냥 우리 고양이 이름 tori 로 하였음.)
-
 ## dependencies
 ~~- fsnotify (사용안함.)~~ backup 참조
 ~~- install : go get -u github.com/fsnotify/fsnotify~~
