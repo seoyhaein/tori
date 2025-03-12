@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package protos;
+option go_package = "github.com/seoyhaein/tori/protos";
+
+import "fileblock.proto";
+
+message DataBlockData {
+  repeated FileBlockData blocks = 1;
+}

@@ -1,0 +1,15 @@
+{
+  "version": "1.0.1",
+  "delimiter": ["_", "."],
+  "header": ["R1", "R2"],
+  "rowRules": {
+    "matchParts": [0, 1, 2, 4, 5, 6]
+  },
+  "columnRules": {
+    "matchParts": [3]
+  },
+  "sizeRules": {
+    "minSize": 100,
+    "maxSize": 1048576
+  }
+}

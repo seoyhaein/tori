@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package protos;
+option go_package = "github.com/seoyhaein/tori/protos";
+
+// 단일 파일 블럭을 나타내는 메시지
+message FileBlockData {
+  string block_id = 1;               // 블록을 구분하기 위한 고유 ID
+  repeated string column_headers = 2; // 컬럼 이름들
+  repeated Row rows = 3;              // 행 데이터
+}
+
+// 하나의 행(row)을 나타내며, 행 번호와 헤더-값 매핑을 포함
+message Row {
+  int32 row_number = 1;                    // 행 번호
+  map<string, string> cell_columns = 2;    // 헤더 이름과 셀 값 매핑
+}
