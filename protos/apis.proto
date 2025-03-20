@@ -20,6 +20,6 @@ message StoreFoldersInfoResponse {
 
 // 폴더 정보 저장 서비스를 정의합니다.
 service DBApisService {
-  // 아무 입력 값 없이 서버 내부의 폴더 정보를 DB에 저장합니다.
+  // 아무 입력 값 없이 서버 내부의 폴더 정보를 DB에 저장
   rpc StoreFoldersInfo(StoreFoldersInfoRequest) returns (StoreFoldersInfoResponse);
 }

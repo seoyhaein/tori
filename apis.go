@@ -182,7 +182,7 @@ func SearchFilesByPattern(folder, pattern string) ([]string, error) {
 }
 
 // DeleteFilesByPattern 주어진 폴더 내에서 지정한 glob 패턴에 매칭되는 파일들을 검색해서 삭제함
-// 만약 매칭된 파일이 2개 이상이면, 해당 파일들을 모두 삭제합니다.
+// 만약 매칭된 파일이 2개 이상이면, 해당 파일들을 모두 삭제
 func DeleteFilesByPattern(folder, pattern string) error {
 	files, err := SearchFilesByPattern(folder, pattern)
 	if err != nil {

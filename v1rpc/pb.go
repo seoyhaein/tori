@@ -5,6 +5,7 @@ import (
 	pb "github.com/seoyhaein/tori/protos"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"os"
 	"sort"
 )
@@ -109,7 +110,8 @@ func MergeFileBlocksFromData(inputBlocks []*pb.FileBlockData) (*pb.DataBlockData
 	}
 
 	dataBlockData := &pb.DataBlockData{
-		Blocks: inputBlocks,
+		UpdatedAt: timestamppb.Now(), // 현재 시간으로 설정
+		Blocks:    inputBlocks,
 	}
 
 	// 합쳐진 결과를 반환 (필요하다면 로그 메시지 추가)

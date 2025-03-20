@@ -28,7 +28,7 @@ const (
 //
 // 폴더 정보 저장 서비스를 정의합니다.
 type DBApisServiceClient interface {
-	// 아무 입력 값 없이 서버 내부의 폴더 정보를 DB에 저장합니다.
+	// 아무 입력 값 없이 서버 내부의 폴더 정보를 DB에 저장
 	StoreFoldersInfo(ctx context.Context, in *StoreFoldersInfoRequest, opts ...grpc.CallOption) (*StoreFoldersInfoResponse, error)
 }
 
@@ -56,7 +56,7 @@ func (c *dBApisServiceClient) StoreFoldersInfo(ctx context.Context, in *StoreFol
 //
 // 폴더 정보 저장 서비스를 정의합니다.
 type DBApisServiceServer interface {
-	// 아무 입력 값 없이 서버 내부의 폴더 정보를 DB에 저장합니다.
+	// 아무 입력 값 없이 서버 내부의 폴더 정보를 DB에 저장
 	StoreFoldersInfo(context.Context, *StoreFoldersInfoRequest) (*StoreFoldersInfoResponse, error)
 	mustEmbedUnimplementedDBApisServiceServer()
 }
