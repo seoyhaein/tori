@@ -6,6 +6,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	c "github.com/seoyhaein/tori/config"
 	d "github.com/seoyhaein/tori/db"
+	"github.com/seoyhaein/tori/v1rpc"
 	"os"
 	"path"
 	"path/filepath"
@@ -81,6 +82,9 @@ func main() {
 	if err = SaveDataBlock(fb, outputDatablock); err != nil {
 		os.Exit(1)
 	}
+
+	dpb, _ := v1rpc.LoadDataBlock(outputDatablock)
+	v1rpc.SaveDataBlockToTextFile("/test/datablock.txt", dpb)
 
 }
 

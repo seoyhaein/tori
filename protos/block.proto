@@ -7,7 +7,7 @@ import "google/protobuf/timestamp.proto";
 
 // 단일 파일 블럭을 나타내는 메시지
 message FileBlockData {
-  string block_id = 1;                // 블록을 구분하기 위한 고유 ID
+  string block_id = 1;                // 블록을 구분하기 위한 고유 ID, file path 임.
   repeated string column_headers = 2; // 컬럼 이름들
   repeated Row rows = 3;              // 행 데이터
 }
