@@ -16,13 +16,6 @@ import (
 	"syscall"
 )
 
-/*const (
-	maxRequestBytes   = 1.5 * 1024 * 1024
-	grpcOverheadBytes = 512 * 1024
-	maxStreams        = 1<<32 - 1 // math.MaxUint32와 동일
-	maxSendBytes      = 1<<31 - 1 // math.MaxInt32와 동일
-)*/
-
 const (
 	defaultMaxRequestBytes   = 1.5 * 1024 * 1024
 	defaultGrpcOverheadBytes = 512 * 1024
@@ -52,10 +45,6 @@ func getEnvInt(key string, defaultVal int) int {
 	return val
 }
 
-// 기존 코드에서는 net.Listen 실패 시 log.Fatalf로 바로 종료했으나,
-// 수정된 버전에서는 에러를 반환해 상위에서 graceful하게 처리할 수 있게 함.
-
-// 예시 Unary 인터셉터 (로깅용)
 // gRPC 요청을 받을 때마다 요청 메서드와 에러 정보를 로깅함.
 func loggingInterceptor(
 	ctx context.Context,
@@ -72,12 +61,6 @@ func loggingInterceptor(
 }
 
 func Server() error {
-	// 기존 코드:
-	// lis, err := net.Listen("tcp", address)
-	// if err != nil {
-	//     log.Fatalf("failed to listen: %v", err)
-	// }
-	// 수정: 에러 발생 시 에러 반환
 	lis, err := net.Listen("tcp", address)
 	if err != nil {
 		return fmt.Errorf("failed to listen on %s: %w", address, err)
@@ -110,16 +93,14 @@ func Server() error {
 	grpcServer := grpc.NewServer(opts...)
 
 	// 기존 서비스 등록 (주석 처리된 상태)
-	// RegisterJobsManSrv(grpcServer)
-	// RegisterHelloWorldManSrv(grpcServer)
 	// 수정: 헬스 체크 서비스 등록
 	healthServer := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
 	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
 
-	// 기존: Reflection 서비스 등록
+	// 기존: Reflection 서비스 등록, 디버깅 및 grpcurl 노출 위해서.
 	reflection.Register(grpcServer)
-
+	RegisterDataBlockServiceServer(grpcServer)
 	log.Printf("gRPC server started, address: %s", address)
 
 	// graceful shutdown 처리 추가
@@ -128,7 +109,7 @@ func Server() error {
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		sig := <-sigCh
 		log.Printf("Received signal: %v. Initiating graceful shutdown...", sig)
-		// GracefulStop은 현재 처리 중인 요청을 모두 완료한 후 서버를 중지함.
+		// GracefulStop 은 현재 처리 중인 요청을 모두 완료한 후 서버를 중지함.
 		grpcServer.GracefulStop()
 	}()
 
