@@ -7,7 +7,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	d "github.com/seoyhaein/tori/db"
 	"github.com/seoyhaein/tori/protos"
-	r "github.com/seoyhaein/tori/rule"
 	"github.com/seoyhaein/tori/v1rpc"
 	u "github.com/seoyhaein/utils"
 	"os"
@@ -19,7 +18,7 @@ import (
 // DBApis 데이터베이스와 관련된 인터페이스
 type DBApis interface {
 	StoreFoldersInfo(ctx context.Context, db *sql.DB) error
-	CompareFoldersAndFiles(ctx context.Context, db *sql.DB) (*bool, []d.FolderDiff, []d.FileChange, []*protos.FileBlockData, error)
+	CompareFoldersAndFiles(ctx context.Context, db *sql.DB) (*bool, []d.FolderDiff, []d.FileChange, []*protos.FileBlock, error)
 }
 
 // dBApisImpl DBApis 인터페이스의 구현체
@@ -47,7 +46,7 @@ func (f *dBApisImpl) StoreFoldersInfo(ctx context.Context, db *sql.DB) error {
 }
 
 // CompareFoldersAndFiles 폴더와 파일을 비교하고, 변경 내역을 반환
-func (f *dBApisImpl) CompareFoldersAndFiles(ctx context.Context, db *sql.DB) (*bool, []d.FolderDiff, []d.FileChange, []*protos.FileBlockData, error) {
+func (f *dBApisImpl) CompareFoldersAndFiles(ctx context.Context, db *sql.DB) (*bool, []d.FolderDiff, []d.FileChange, []*protos.FileBlock, error) {
 	// 1. 폴더 비교: 폴더 목록과 폴더 간 차이 정보를 가져옴
 	_, folders, folderDiffs, err := d.CompareFolders(db, f.rootDir, f.foldersExclusion, f.filesExclusions)
 	if err != nil {
@@ -55,7 +54,7 @@ func (f *dBApisImpl) CompareFoldersAndFiles(ctx context.Context, db *sql.DB) (*b
 	}
 
 	var allFileChanges []d.FileChange
-	var fbs []*protos.FileBlockData // 파일 블록 데이터 슬라이스
+	var fbs []*protos.FileBlock // 파일 블록 데이터 슬라이스
 
 	// 2. 각 폴더에 대해 파일 비교
 	for _, folder := range folders {
@@ -112,7 +111,7 @@ func (f *dBApisImpl) CompareFoldersAndFiles(ctx context.Context, db *sql.DB) (*b
 
 			// []Files 를 []string(파일 이름 목록)으로 변환 후, 새 파일 블록 생성
 			fileNames := d.ExtractFileNames(files)
-			fb, err := r.GenerateFileBlock(folder.Path, fileNames)
+			fb, err := v1rpc.GenerateFileBlock(folder.Path, fileNames)
 			if err != nil {
 				return nil, nil, nil, nil, err
 			}
@@ -142,8 +141,8 @@ func UpdateFilesAndFolders(ctx context.Context, db *sql.DB, diffs []d.FolderDiff
 }
 
 // SaveDataBlock fileblock 을 병합하여 datablcok 으로 저장
-// outputFile 은 파일이어야 함. 파일이 존재할 경우는 체크 하지 않고 덮어씀. TODO 이거 생각해봐야 함.
-func SaveDataBlock(inputBlocks []*protos.FileBlockData, outputFile string) error {
+// outputFile 은 파일이어야 함. 파일이 존재할 경우는 체크 하지 않고 덮어씀.
+func SaveDataBlock(inputBlocks []*protos.FileBlock, outputFile string) error {
 	dataBlock, err := v1rpc.MergeFileBlocksFromData(inputBlocks)
 	if err != nil {
 		return err

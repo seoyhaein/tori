@@ -6,7 +6,6 @@ import (
 	"github.com/seoyhaein/tori/v1rpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
-	"google.golang.org/protobuf/types/known/emptypb"
 	"net"
 	"testing"
 	"time"
@@ -57,9 +56,8 @@ func TestGetDataBlockData(t *testing.T) {
 
 	// 생성된 proto 클라이언트 스텁 사용
 	client := pb.NewDataBlockServiceClient(conn)
-
-	// 빈 요청(emptypb.Empty)으로 GetDataBlockData 호출
-	resp, err := client.GetDataBlockData(ctx, &emptypb.Empty{})
+	// 일단 DataBlock 이 없다고 할때를 기준으로 잡음. 무고건 데이터를 전송받게 됨.
+	resp, err := client.GetDataBlock(ctx, &pb.GetDataBlockRequest{})
 	if err != nil {
 		t.Fatalf("GetDataBlockData call failed: %v", err)
 	}

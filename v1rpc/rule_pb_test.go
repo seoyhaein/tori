@@ -82,7 +82,7 @@ func TestLoadFileBlock(t *testing.T) {
 	}()
 
 	// 테스트용 FileBlockData 메시지 생성
-	originalMsg := &pb.FileBlockData{
+	originalMsg := &pb.FileBlock{
 		BlockId:       "test-block",
 		ColumnHeaders: []string{"col1", "col2"},
 		Rows: []*pb.Row{

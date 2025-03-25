@@ -1,12 +1,14 @@
-package rule
+package v1rpc
 
 import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"github.com/seoyhaein/tori/protos"
-	"github.com/seoyhaein/tori/v1rpc"
+	pb "github.com/seoyhaein/tori/protos"
 	u "github.com/seoyhaein/utils"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"log"
 	"os"
 	"path/filepath"
@@ -355,7 +357,7 @@ func GenerateMap(filePath string) (map[int]map[string]string, error) {
 }
 
 // GenerateFileBlock 일단 이름 고침. filePath 는 rule.josn 이 있는 위치이자 fileblock.csv, invalid_files, *.pb 파일 등이 가 저장될 위치.
-func GenerateFileBlock(filePath string, files []string) (*protos.FileBlockData, error) {
+func GenerateFileBlock(filePath string, files []string) (*pb.FileBlock, error) {
 	// Load the rule set
 	ruleSet, err := LoadRuleSetFromFile(filePath) // 이 메서드에서 filepath 의 검증을 해줌.
 	if err != nil {
@@ -386,9 +388,9 @@ func GenerateFileBlock(filePath string, files []string) (*protos.FileBlockData, 
 	}
 
 	// blockId 를 filePath 로 잡아둠.
-	fbd := v1rpc.ConvertMapToFileBlockData(validRows, ruleSet.Header, filePath)
+	fbd := ConvertMapToFileBlock(validRows, ruleSet.Header, filePath)
 	pbName := filepath.Join(filePath, fmt.Sprintf("%sfiles.pb", filepath.Base(filePath)))
-	err = v1rpc.SaveProtoToFile(pbName, fbd, 0777)
+	err = SaveProtoToFile(pbName, fbd, 0777)
 	if err != nil {
 		return nil, fmt.Errorf("failed to save proto to file: %w", err)
 	}
@@ -450,4 +452,180 @@ func ReadAllFileNames(dirPath string, exclusions []string) ([]string, error) {
 	}
 
 	return fileNames, nil
+}
+
+/*
+// 기본 권한(0644) 사용
+err := SaveProtoToFile("data.pb", message, 0644)
+
+// 다른 권한 설정
+err := SaveProtoToFile("data.pb", message, 0600) // 소유자만 읽기/쓰기 가능
+
+// os.FileMode 상수 사용
+err := SaveProtoToFile("data.pb", message, os.ModePerm) // 0777
+*/
+
+func SaveProtoToFile(filePath string, message proto.Message, perm os.FileMode) error {
+	data, err := proto.Marshal(message)
+	if err != nil {
+		return fmt.Errorf("failed to serialize data: %w", err)
+	}
+
+	err = os.WriteFile(filePath, data, perm)
+	if err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+	return nil
+}
+
+func LoadFileBlock(filePath string) (*pb.FileBlock, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	message := &pb.FileBlock{}
+	err = proto.Unmarshal(data, message)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deserialize data: %w", err)
+	}
+
+	return message, nil
+}
+
+func LoadDataBlock(filePath string) (*pb.DataBlock, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	message := &pb.DataBlock{}
+	err = proto.Unmarshal(data, message)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deserialize data: %w", err)
+	}
+
+	return message, nil
+}
+
+// SaveFileBlockToTextFile 함수: FileBlock 를 텍스트 포맷으로 저장
+func SaveFileBlockToTextFile(filePath string, data *pb.FileBlock) error {
+	// proto 메시지를 텍스트 포맷으로 변환
+	textData, err := prototext.MarshalOptions{Multiline: true, Indent: "  "}.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal to text format: %w", err)
+	}
+
+	// 텍스트 데이터를 파일에 저장
+	return os.WriteFile(filePath, textData, os.ModePerm)
+}
+
+// MergeFileBlocks 여러 FileBlock 파일을 읽어 DataBlock 으로 합치는 메서드
+func MergeFileBlocks(inputFiles []string, outputFile string) error {
+	var blocks []*pb.FileBlock
+	// 각 입력 파일을 로드하여 blocks 에 추가
+	for _, file := range inputFiles {
+		block, err := LoadFileBlock(file)
+		if err != nil {
+			return fmt.Errorf("failed to load file %s: %w", file, err)
+		}
+		blocks = append(blocks, block)
+	}
+
+	// DataBlockData 생성
+	dataBlockData := &pb.DataBlock{
+		UpdatedAt: timestamppb.Now(), // 현재 시간으로 설정
+		Blocks:    blocks,
+	}
+
+	// DataBlockData 저장
+	if err := SaveProtoToFile(outputFile, dataBlockData, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to save DataBlock: %w", err)
+	}
+
+	fmt.Printf("Successfully merged %d FileBlock files into %s\n", len(inputFiles), outputFile)
+	return nil
+}
+
+// MergeFileBlocksFromData 여러 *pb.FileBlock 를 하나의 DataBlock 으로 통합
+// 입력 파라미터가 이미 로드된 FileBlock 들의 슬라이스이므로, 별도의 파일 로딩 과정 없이 합친 결과를 반환함
+func MergeFileBlocksFromData(inputBlocks []*pb.FileBlock) (*pb.DataBlock, error) {
+	if len(inputBlocks) == 0 {
+		return nil, fmt.Errorf("no input file blocks provided")
+	}
+
+	dataBlockData := &pb.DataBlock{
+		UpdatedAt: timestamppb.Now(), // 현재 시간으로 설정
+		Blocks:    inputBlocks,
+	}
+
+	// 합쳐진 결과를 반환 (필요하다면 로그 메시지 추가)
+	fmt.Printf("Successfully merged %d FileBlockData into one DataBlockData\n", len(inputBlocks))
+	return dataBlockData, nil
+}
+
+// SaveDataBlockToTextFile DataBlockData 텍스트 포맷으로 파일에 저장
+func SaveDataBlockToTextFile(filePath string, data *pb.DataBlock) error {
+	// proto 메시지를 텍스트 포맷으로 변환
+	textData, err := prototext.MarshalOptions{Multiline: true, Indent: "  "}.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal DataBlock to text format: %w", err)
+	}
+
+	// 텍스트 데이터를 파일에 저장
+	if err := os.WriteFile(filePath, textData, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to write to file %s: %w", filePath, err)
+	}
+
+	fmt.Printf("Successfully saved DataBlock to %s\n", filePath)
+	return nil
+}
+
+// GenerateRows 테스트 데이터 생성
+func GenerateRows(data [][]string, headers []string) []*pb.Row {
+	//rows := []*pb.Row{}
+	rows := make([]*pb.Row, 0, len(data))
+	for i, cells := range data {
+		row := &pb.Row{
+			RowNumber:   int32(i + 1), // 1부터 시작
+			CellColumns: make(map[string]string, len(headers)),
+		}
+		for j, header := range headers {
+			if j < len(cells) {
+				row.CellColumns[header] = cells[j]
+			}
+		}
+		rows = append(rows, row)
+	}
+	return rows
+}
+
+// ConvertMapToFileBlock map[int]map[string]string 를 FileBlockData 메시지로 변환
+func ConvertMapToFileBlock(rows map[int]map[string]string, headers []string, blockID string) *pb.FileBlock {
+	fbd := &pb.FileBlock{
+		BlockId:       blockID,
+		ColumnHeaders: headers, // 사용자 정의 헤더
+		Rows:          make([]*pb.Row, 0, len(rows)),
+	}
+
+	// rowIndex 를 정렬해 순차적으로 처리
+	rowIndices := make([]int, 0, len(rows))
+	for idx := range rows {
+		rowIndices = append(rowIndices, idx)
+	}
+	sort.Ints(rowIndices)
+
+	for _, rIdx := range rowIndices {
+		columns := rows[rIdx]
+		r := &pb.Row{
+			RowNumber:   int32(rIdx), // 1-based. 필요에 맞게 조정
+			CellColumns: make(map[string]string, len(columns)),
+		}
+		// 열 데이터를 그대로 저장
+		for colKey, value := range columns {
+			r.CellColumns[colKey] = value
+		}
+		fbd.Rows = append(fbd.Rows, r)
+	}
+	return fbd
 }
