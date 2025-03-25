@@ -13,7 +13,9 @@
 - 검색 기능 넣고, grpc 연동 진행.
 - 기초 grpc 넣어두고 grpc 프로젝트 만들고 고도화 함. 시작.
 - config 에 grpc 관련 부수정보 넣을 것.
-- sql 구문 관련해서 보안이나 여러 문제 들에 대해서 한번 체크하고 가자.
+- sql 구문 관련해서 보안이나 여러 문제 들에 대해서 한번 체크하고 가자.  
+- db 관련해서 테스트 코드 작성해서 최적으로 만들어야 함.  
+- 파일명을 읽어드리고 rule 을 읽어드려서 검증하는 루틴 만들어줘야 함.  
 - https://github.com/golang/sync/tree/master/singleflight 이거 적용해볼 것을 생각해보자.
 - golang.org/x/sync/singleflight
   ~~- grpc 컨테이너 오류 수정해줘야 함.~~  

@@ -6,6 +6,8 @@ import (
 	"os"
 )
 
+// TODO 업데이트 될 예정. MaxWatchCount 이거 필요 없어짐.
+
 type Config struct {
 	MaxWatchCount int    `json:"MaxWatchCount"`
 	RootDir       string `json:"rootDir"` // lustre-client 마운트된 폴더로 사용할 예정.

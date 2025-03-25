@@ -24,7 +24,7 @@ const (
 )
 
 var (
-	address = ":50052"
+	Address = ":50052"
 )
 
 func init() {
@@ -61,9 +61,9 @@ func loggingInterceptor(
 }
 
 func Server() error {
-	lis, err := net.Listen("tcp", address)
+	lis, err := net.Listen("tcp", Address)
 	if err != nil {
-		return fmt.Errorf("failed to listen on %s: %w", address, err)
+		return fmt.Errorf("failed to listen on %s: %w", Address, err)
 	}
 
 	// TLS 설정 예시 (TLS가 필요하면 주석 풀고 사용)
@@ -101,7 +101,7 @@ func Server() error {
 	// 기존: Reflection 서비스 등록, 디버깅 및 grpcurl 노출 위해서.
 	reflection.Register(grpcServer)
 	RegisterDataBlockServiceServer(grpcServer)
-	log.Printf("gRPC server started, address: %s", address)
+	log.Printf("gRPC server started, address: %s", Address)
 
 	// graceful shutdown 처리 추가
 	go func() {

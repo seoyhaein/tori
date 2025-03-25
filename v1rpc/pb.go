@@ -10,6 +10,17 @@ import (
 	"sort"
 )
 
+/*
+// 기본 권한(0644) 사용
+err := SaveProtoToFile("data.pb", message, 0644)
+
+// 다른 권한 설정
+err := SaveProtoToFile("data.pb", message, 0600) // 소유자만 읽기/쓰기 가능
+
+// os.FileMode 상수 사용
+err := SaveProtoToFile("data.pb", message, os.ModePerm) // 0777
+*/
+
 func SaveProtoToFile(filePath string, message proto.Message, perm os.FileMode) error {
 	data, err := proto.Marshal(message)
 	if err != nil {
@@ -22,17 +33,6 @@ func SaveProtoToFile(filePath string, message proto.Message, perm os.FileMode) e
 	}
 	return nil
 }
-
-/*
-// 기본 권한(0644) 사용
-err := SaveProtoToFile("data.pb", message, 0644)
-
-// 다른 권한 설정
-err := SaveProtoToFile("data.pb", message, 0600) // 소유자만 읽기/쓰기 가능
-
-// os.FileMode 상수 사용
-err := SaveProtoToFile("data.pb", message, os.ModePerm) // 0777
-*/
 
 func LoadFileBlock(filePath string) (*pb.FileBlockData, error) {
 	data, err := os.ReadFile(filePath)

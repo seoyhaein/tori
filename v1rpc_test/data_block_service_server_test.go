@@ -22,6 +22,8 @@ func init() {
 	lis = bufconn.Listen(bufSize)
 	grpcServer := grpc.NewServer()
 	// DataBlockServiceServer 구현체를 등록 (구현체는 NewDataBlockServiceServer()로 생성)
+	// 테스트의 독립성을 위해서 이거 사용하지 않음.
+	// v1rpc.RegisterDataBlockServiceServer(grpcServer)
 	pb.RegisterDataBlockServiceServer(grpcServer, v1rpc.NewDataBlockServiceServer())
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
@@ -70,13 +72,13 @@ func TestGetDataBlockData(t *testing.T) {
 		if resp.Data.GetUpdatedAt() == nil {
 			t.Error("Response UpdatedAt field is nil.")
 		}
-		// 파일 블럭 리스트가 비어 있어야 함 (예시)
+		// 파일 블럭 리스트가 비어 있어야 함 TODO 실제 구현시 수정해야함.
 		if len(resp.Data.GetBlocks()) != 0 {
 			t.Errorf("File block count mismatch. Expected: %d, Got: %d", 0, len(resp.Data.GetBlocks()))
 		}
 		t.Logf("Response Data: %+v", resp.Data)
 	}
 
-	// 테스트가 충분히 기다리도록 잠깐 sleep (예시)
+	// 테스트가 종료되기를 충분히 기다리도록 잠깐 sleep
 	time.Sleep(100 * time.Millisecond)
 }
