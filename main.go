@@ -18,6 +18,8 @@ var (
 	db          *sql.DB
 	serverErrCh chan error
 	Log         = logrus.New()
+
+	btest bool
 )
 
 func init() {
@@ -67,11 +69,15 @@ func main() {
 
 	// 테스트로 빈파일 생성
 	// 기존 파일이 생성되어 있을 경우 권한 설정을 안해줌. 버그지만 고치지 않음.
-	testFilePath := config.RootDir
-	testFilePath = filepath.Join(testFilePath, "testFiles/")
-	testFilePath = path.Clean(testFilePath)
-	d.MakeTestFiles(testFilePath)
-	d.MakeTestFilesA("/test/baba/")
+	// TODO 테스트 위해서 만들어둠. true 이면 생성해주고 false 이면 생성안해주는 것으로.
+	btest = false
+	if btest {
+		testFilePath := config.RootDir
+		testFilePath = filepath.Join(testFilePath, "testFiles/")
+		testFilePath = path.Clean(testFilePath)
+		d.MakeTestFiles(testFilePath)
+		d.MakeTestFilesA("/test/baba/")
+	}
 
 	ctx := context.Background()
 	// exclusion 은 보안상 여기다가 넣어둠. TODO 일단 생각은 해보자.
@@ -79,13 +85,12 @@ func main() {
 	dbApis := NewDBApis(config.RootDir, nil, exclusions)
 	err = dbApis.StoreFoldersInfo(ctx, db)
 	if err != nil {
-
-		os.Exit(1)
+		Log.Fatalf("failed to store folders info into db : %v", err)
 	}
 
 	b, fDiff, fChange, fb, err := dbApis.CompareFoldersAndFiles(ctx, db)
 	if err != nil {
-		os.Exit(1)
+		Log.Fatalf("폴더와 파일을 비교하고, 변경 내역을 반환 실패: %v", err)
 	}
 
 	if b != nil && *b {

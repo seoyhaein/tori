@@ -101,6 +101,7 @@ func Server() error {
 	// 기존: Reflection 서비스 등록, 디버깅 및 grpcurl 노출 위해서.
 	reflection.Register(grpcServer)
 	RegisterDataBlockServiceServer(grpcServer)
+	RegisterDBApisServiceServer(grpcServer)
 	log.Printf("gRPC server started, address: %s", Address)
 
 	// graceful shutdown 처리 추가

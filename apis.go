@@ -210,3 +210,7 @@ func DeleteFiles(files []string) error {
 	}
 	return nil
 }
+
+func CheckDirs() {
+
+}
