@@ -7,11 +7,14 @@ import (
 )
 
 // TODO 업데이트 될 예정. MaxWatchCount 이거 필요 없어짐.
+// TODO 수정 필요함.
 
 type Config struct {
 	MaxWatchCount int    `json:"MaxWatchCount"`
 	RootDir       string `json:"rootDir"` // lustre-client 마운트된 폴더로 사용할 예정.
 }
+
+var GlobalConfig *Config
 
 func LoadConfig(filename string) (*Config, error) {
 	file, err := os.Open(filename)

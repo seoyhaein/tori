@@ -2,8 +2,8 @@ package v1rpc_test
 
 import (
 	"context"
-	"github.com/seoyhaein/tori/v1rpc" // Server()가 정의된 패키지. 실제 경로에 맞게 수정
-	"github.com/sirupsen/logrus"
+	"github.com/seoyhaein/tori/log"
+	"github.com/seoyhaein/tori/v1rpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"os"
@@ -11,8 +11,6 @@ import (
 	"testing"
 	"time"
 )
-
-var Log = logrus.New()
 
 func TestServerHealth(t *testing.T) {
 	v1rpc.Address = "localhost:50053"

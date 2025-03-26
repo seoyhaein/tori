@@ -7,21 +7,25 @@ import (
 	"errors"
 	"fmt"
 	u "github.com/seoyhaein/utils"
-	"log"
+	"github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 )
 
+var Log = logrus.New()
+
 //go:embed queries/*.sql
 var sqlFiles embed.FS
+
+// TODO 별도로 정리해야함.
 
 func MakeTestFiles(path string) {
 	// 디렉토리 생성
 	err := os.MkdirAll(path, os.ModePerm)
 	if err != nil {
-		log.Fatalf("Failed to create directory %s: %v", path, err)
+		Log.Fatalf("Failed to create directory %s: %v", path, err)
 	}
 
 	// 디렉토리 권한을 777로 설정 os.ModePerm 해줌.
@@ -97,9 +101,9 @@ func MakeTestFiles(path string) {
 		filePath := fmt.Sprintf("%s/%s", path, fileName)
 		_, err := os.Create(filePath)
 		if err != nil {
-			log.Fatalf("Failed to create file %s: %v", filePath, err)
+			Log.Fatalf("Failed to create file %s: %v", filePath, err)
 		} else {
-			log.Printf("Created file: %s", filePath)
+			Log.Infof("Created file: %s", filePath)
 		}
 	}
 }
@@ -108,7 +112,7 @@ func MakeTestFilesA(path string) {
 	// 디렉토리 생성
 	err := os.MkdirAll(path, os.ModePerm)
 	if err != nil {
-		log.Fatalf("Failed to create directory %s: %v", path, err)
+		Log.Fatalf("Failed to create directory %s: %v", path, err)
 	}
 
 	// 디렉토리 권한을 777로 설정 os.ModePerm 해줌.
@@ -140,9 +144,9 @@ func MakeTestFilesA(path string) {
 		filePath := fmt.Sprintf("%s/%s", path, fileName)
 		_, err := os.Create(filePath)
 		if err != nil {
-			log.Fatalf("Failed to create file %s: %v", filePath, err)
+			Log.Fatalf("Failed to create file %s: %v", filePath, err)
 		} else {
-			log.Printf("Created file: %s", filePath)
+			Log.Infof("Created file: %s", filePath)
 		}
 	}
 }
@@ -199,7 +203,7 @@ func ConnectDB(driverName, dataSourceName string, enableForeignKeys bool) (*sql.
 		if _, err := db.Exec("PRAGMA foreign_keys = ON;"); err != nil {
 			// 외래 키 활성화 실패 시 db.Close() 호출하고, 그 에러도 함께 처리함.
 			if cErr := db.Close(); cErr != nil {
-				return nil, fmt.Errorf("failed to enable foreign keys: %w; additionally failed to close db: %v", err, cErr)
+				return nil, fmt.Errorf("failed to enable foreign keys: %w; additionally failed to close db: %w", err, cErr)
 			}
 			return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
 		}
@@ -210,13 +214,13 @@ func ConnectDB(driverName, dataSourceName string, enableForeignKeys bool) (*sql.
 // InitializeDatabase embed 된  SQL 파일(init.sql)을 사용하여 데이터베이스를 초기화
 func InitializeDatabase(db *sql.DB) error {
 	if !isDBInitialized(db) {
-		log.Println("Running DB initialization (embed)...")
+		Log.Info("Running DB initialization (embed)...")
 		if err := execSQLNoCtx(db, "init.sql"); err != nil {
 			return fmt.Errorf("DB initialization failed: %w", err)
 		}
-		log.Println("DB initialization completed successfully (embed).")
+		Log.Info("DB initialization completed successfully (embed).")
 	} else {
-		log.Println("DB already initialized. Skipping init.sql execution.")
+		Log.Info("DB already initialized. Skipping init.sql execution.")
 	}
 	return nil
 }
@@ -225,7 +229,7 @@ func isDBInitialized(db *sql.DB) bool {
 	var count int
 	err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('folders', 'files')").Scan(&count)
 	if err != nil {
-		log.Println("Failed to check database initialization:", err)
+		Log.Info("Failed to check database initialization:", err)
 		return false
 	}
 	return count == 2 // folders, files 두 테이블이 모두 있어야 true 반환
@@ -348,7 +352,7 @@ func StoreFilesFolderInfo(ctx context.Context, db *sql.DB, folderPath string, ex
 
 	if err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
-			log.Printf("rollback failed: %v", rbErr)
+			Log.Infof("rollback failed: %v", rbErr)
 		}
 		return fmt.Errorf("failed to get folder details: %w", err)
 	}
@@ -361,7 +365,7 @@ func StoreFilesFolderInfo(ctx context.Context, db *sql.DB, folderPath string, ex
 		folderDetails.CreatedTime)
 	if err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
-			log.Printf("rollback failed: %v", rbErr)
+			Log.Infof("rollback failed: %v", rbErr)
 		}
 		return fmt.Errorf("failed to insert folder: %w", err)
 	}
@@ -371,7 +375,7 @@ func StoreFilesFolderInfo(ctx context.Context, db *sql.DB, folderPath string, ex
 	err = tx.QueryRowContext(ctx, "SELECT id FROM folders WHERE path = ?", folderDetails.Path).Scan(&folderID)
 	if err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
-			log.Printf("rollback failed: %v", rbErr)
+			Log.Infof("rollback failed: %v", rbErr)
 		}
 		return fmt.Errorf("failed to query folder ID: %w", err)
 	}
@@ -385,7 +389,7 @@ func StoreFilesFolderInfo(ctx context.Context, db *sql.DB, folderPath string, ex
 			file.CreatedTime)
 		if err != nil {
 			if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
-				log.Printf("rollback failed: %v", rbErr)
+				Log.Infof("rollback failed: %v", rbErr)
 			}
 			return fmt.Errorf("failed to insert file: %w", err)
 		}
@@ -394,7 +398,7 @@ func StoreFilesFolderInfo(ctx context.Context, db *sql.DB, folderPath string, ex
 	err = execSQLTx(ctx, tx, "update_folders_fromDB.sql", folderID)
 	if err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
-			log.Printf("rollback failed: %v", rbErr)
+			Log.Infof("rollback failed: %v", rbErr)
 		}
 		return fmt.Errorf("failed to update folder statistics: %w", err)
 	}
@@ -714,7 +718,7 @@ func CompareFolders(db *sql.DB, rootPath string, foldersExclusions, filesExclusi
 		return false, nil, nil, fmt.Errorf("failed to get subfolders from disk: %w", err)
 	}
 
-	// DB에서 폴더 정보 조회
+	// DB 에서 폴더 정보 조회
 	dbFolders, err := GetFoldersFromDB(db)
 	if err != nil {
 		return false, nil, nil, fmt.Errorf("failed to get folders from DB: %w", err)
@@ -904,7 +908,7 @@ func ClearDatabase(db *sql.DB) error {
 	return err
 }
 
-// ExtractFileNames
+// ExtractFileNames 변환.
 func ExtractFileNames(files []File) []string {
 	names := make([]string, 0, len(files))
 	for _, f := range files {

@@ -408,4 +408,27 @@ func TestFirstCheck(t *testing.T) {
 	}
 }
 
+
+func main() {
+
+	// 테스트 용도
+	//_ = RemoveDBFile("file_monitor.db")
+	// db connection foreign key 설정을 위해 PRAGMA foreign_keys = ON; 설정을 해줘야 함.
+
+	defer func() {
+		/*if err = d.ClearDatabase(db); err != nil {
+			//log.Fatal("failed to clear db:", err)
+			os.Exit(1)
+		}*/
+		if db != nil {
+			if cErr := db.Close(); cErr != nil {
+				//log.Fatal("failed to close db:", err)
+
+
+				Log.Warnf("failed to db closed : %v ", cErr) // defer 내부에서도 os.Exit 사용 가능
+			}
+		}
+
+	}()
+
 ```

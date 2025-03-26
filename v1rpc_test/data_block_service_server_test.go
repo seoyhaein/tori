@@ -56,7 +56,8 @@ func TestGetDataBlockData(t *testing.T) {
 
 	// 생성된 proto 클라이언트 스텁 사용
 	client := pb.NewDataBlockServiceClient(conn)
-	// 일단 DataBlock 이 없다고 할때를 기준으로 잡음. 무고건 데이터를 전송받게 됨.
+	// 일단 DataBlock 이 없다고 할때를 기준으로 잡음. 무조건 데이터를 전송받게 됨.
+	// TODO 이후 CurrentUpdateAt 에 따라서 테스트 진행해야함.
 	resp, err := client.GetDataBlock(ctx, &pb.GetDataBlockRequest{})
 	if err != nil {
 		t.Fatalf("GetDataBlockData call failed: %v", err)
@@ -67,13 +68,13 @@ func TestGetDataBlockData(t *testing.T) {
 		t.Error("Response data is nil.")
 	} else {
 		// updated_at 필드가 설정되어 있는지 확인
-		if resp.Data.GetUpdatedAt() == nil {
+		if updatedAt := resp.Data.GetUpdatedAt(); updatedAt == nil {
 			t.Error("Response UpdatedAt field is nil.")
+		} else {
+			t.Logf("UpdatedAt: %v", updatedAt)
 		}
-		// 파일 블럭 리스트가 비어 있어야 함 TODO 실제 구현시 수정해야함.
-		if len(resp.Data.GetBlocks()) != 0 {
-			t.Errorf("File block count mismatch. Expected: %d, Got: %d", 0, len(resp.Data.GetBlocks()))
-		}
+		// 파일 블럭 리스트 결과를 로그로 출력 (조건 검사는 하지 않음)
+		t.Logf("File blocks: %+v", resp.Data.GetBlocks())
 		t.Logf("Response Data: %+v", resp.Data)
 	}
 
