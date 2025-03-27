@@ -2,7 +2,7 @@ package v1rpc_test
 
 import (
 	"context"
-	"github.com/seoyhaein/tori/log"
+	globallog "github.com/seoyhaein/tori/log"
 	"github.com/seoyhaein/tori/v1rpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 )
+
+var Log = globallog.Log
 
 func TestServerHealth(t *testing.T) {
 	v1rpc.Address = "localhost:50053"

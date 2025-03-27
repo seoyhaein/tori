@@ -9,7 +9,6 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -206,7 +205,7 @@ func WriteInvalidFiles(invalidRows []map[string]string, outputFilePath string) (
 	return err
 }
 
-// ValidateRuleSet validates the given rule set for conflicts and unused parts.
+// ValidateRuleSet validates the given rule set for conflicts and unused parts. TODO 수정해줘야 함. -> 확장 해야함.
 func ValidateRuleSet(ruleSet RuleSet) bool {
 	hasConflict := false
 
@@ -226,7 +225,7 @@ func ValidateRuleSet(ruleSet RuleSet) bool {
 	// Check for conflicts - any index used in more than one role is a conflict
 	for idx, roles := range usageMap {
 		if len(roles) > 1 {
-			log.Printf("Conflict detected: part %d is used in multiple roles: %v", idx, roles)
+			Log.Infof("Conflict detected: part %d is used in multiple roles: %v", idx, roles)
 			hasConflict = true
 		}
 	}

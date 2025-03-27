@@ -32,8 +32,8 @@ func TestSaveProtoToFile(t *testing.T) {
 	}()
 
 	// 테스트용 proto 메시지 생성. 여기서는 StoreFoldersInfoRequest 를 사용함.
-	originalMsg := &pb.StoreFoldersInfoRequest{
-		Confirm: true,
+	originalMsg := &pb.SyncFoldersInfoRequest{
+		Force: true,
 	}
 
 	// SaveProtoToFile 호출: proto 메시지를 임시 파일에 저장
@@ -49,14 +49,14 @@ func TestSaveProtoToFile(t *testing.T) {
 	}
 
 	// 읽어온 데이터를 새 proto 메시지로 Unmarshal
-	var newMsg pb.StoreFoldersInfoRequest
+	var newMsg pb.SyncFoldersInfoRequest
 	if err := proto.Unmarshal(data, &newMsg); err != nil {
 		t.Fatalf("failed to unmarshal data: %v", err)
 	}
 
 	// 원본 메시지와 새 메시지의 필드가 동일한지 확인
-	if originalMsg.Confirm != newMsg.Confirm {
-		t.Errorf("message mismatch: expected Confirm=%v, got Confirm=%v", originalMsg.Confirm, newMsg.Confirm)
+	if originalMsg.Force != newMsg.Force {
+		t.Errorf("message mismatch: expected Confirm=%v, got Confirm=%v", originalMsg.Force, newMsg.Force)
 	}
 }
 

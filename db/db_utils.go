@@ -6,18 +6,20 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	globallog "github.com/seoyhaein/tori/log"
 	u "github.com/seoyhaein/utils"
-	"github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 )
 
-var Log = logrus.New()
-
-//go:embed queries/*.sql
-var sqlFiles embed.FS
+var (
+	GlobalDb *sql.DB
+	Log      = globallog.Log
+	//go:embed queries/*.sql
+	sqlFiles embed.FS
+)
 
 // TODO 별도로 정리해야함.
 

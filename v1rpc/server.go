@@ -3,11 +3,11 @@ package v1rpc
 import (
 	"context"
 	"fmt"
+	globallog "github.com/seoyhaein/tori/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
-	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -25,6 +25,7 @@ const (
 
 var (
 	Address = ":50052"
+	Log     = globallog.Log
 )
 
 func init() {
@@ -39,7 +40,7 @@ func getEnvInt(key string, defaultVal int) int {
 	}
 	val, err := strconv.Atoi(s)
 	if err != nil {
-		log.Printf("Invalid value for %s: %v. Using default: %d", key, err, defaultVal)
+		Log.Infof("Invalid value for %s: %v. Using default: %d", key, err, defaultVal)
 		return defaultVal
 	}
 	return val
@@ -52,10 +53,10 @@ func loggingInterceptor(
 	info *grpc.UnaryServerInfo,
 	handler grpc.UnaryHandler,
 ) (interface{}, error) {
-	log.Printf("Received request for %s", info.FullMethod)
+	Log.Infof("Received request for %s", info.FullMethod)
 	resp, err := handler(ctx, req)
 	if err != nil {
-		log.Printf("Method %s error: %v", info.FullMethod, err)
+		Log.Infof("Method %s error: %v", info.FullMethod, err)
 	}
 	return resp, err
 }
@@ -102,14 +103,14 @@ func Server() error {
 	reflection.Register(grpcServer)
 	RegisterDataBlockServiceServer(grpcServer)
 	RegisterDBApisServiceServer(grpcServer)
-	log.Printf("gRPC server started, address: %s", Address)
+	Log.Infof("gRPC server started, address: %s", Address)
 
 	// graceful shutdown 처리 추가
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		sig := <-sigCh
-		log.Printf("Received signal: %v. Initiating graceful shutdown...", sig)
+		Log.Infof("Received signal: %v. Initiating graceful shutdown...", sig)
 		// GracefulStop 은 현재 처리 중인 요청을 모두 완료한 후 서버를 중지함.
 		grpcServer.GracefulStop()
 	}()
@@ -118,9 +119,9 @@ func Server() error {
 	serveErr := grpcServer.Serve(lis)
 	if serveErr != nil {
 		if !strings.Contains(serveErr.Error(), "use of closed network connection") {
-			log.Printf("gRPC server returned with error: %v", serveErr)
+			Log.Infof("gRPC server returned with error: %v", serveErr)
 		} else {
-			log.Printf("gRPC server is shut down")
+			Log.Infof("gRPC server is shut down")
 		}
 	}
 	return serveErr
