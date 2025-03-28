@@ -243,7 +243,7 @@ func isDBInitialized(db *sql.DB) bool {
 // db utils
 
 // execSQLTx 읽어온 SQL 파일을 트랜잭션 내에서 ExecContext 로 실행.
-// IMPORTANT: 비 SELECT 쿼리에 사용. (결과 리턴 없음)
+// IMPORTANT: 비 SELECT 쿼리에 사용. (결과 리턴 없음) 호출하는 쪽에서 트랜젝션의 commit 이나 rollback 을 신경써줘야 함.
 func execSQLTx(ctx context.Context, tx *sql.Tx, fileName string, args ...interface{}) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -274,7 +274,7 @@ func execSQLTxNoCtx(tx *sql.Tx, fileName string, args ...interface{}) error {
 }
 
 // execSQL 읽어온 SQL 파일을 DB 에서 ExecContext 로 실행.
-// IMPORTANT: 비 SELECT 쿼리에 사용. (결과 리턴 없음)
+// IMPORTANT: 비 SELECT 쿼리에 사용. (결과 리턴 없음) 호출하는 쪽에서 트랜젝션의 commit 이나 rollback 을 신경써줘야 함.
 func execSQL(ctx context.Context, db *sql.DB, fileName string, args ...interface{}) error {
 	if ctx == nil {
 		ctx = context.Background()
