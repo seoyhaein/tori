@@ -9,8 +9,6 @@ import (
 	"testing"
 )
 
-// TODO 내부 사용 api 들 테스트 진행해야함.
-
 func TestIsDBInitialized(t *testing.T) {
 	// in-memory SQLite 데이터베이스 생성
 	db, err := sql.Open("sqlite3", ":memory:")
