@@ -8,6 +8,7 @@ import (
 	"fmt"
 	globallog "github.com/seoyhaein/tori/log"
 	u "github.com/seoyhaein/utils"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,7 +19,9 @@ var (
 	GlobalDb *sql.DB
 	Log      = globallog.Log
 	//go:embed queries/*.sql
-	sqlFiles embed.FS
+	embeddedFiles embed.FS
+	// 중요 sqlFiles 를 fs.FS 타입으로 선언해서 테스트 시 fstest.MapFS 할당이 가능하도록 함.
+	sqlFiles fs.FS = embeddedFiles
 )
 
 // TODO 별도로 정리해야함.
@@ -231,7 +234,7 @@ func isDBInitialized(db *sql.DB) bool {
 	var count int
 	err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('folders', 'files')").Scan(&count)
 	if err != nil {
-		Log.Info("Failed to check database initialization:", err)
+		Log.Warnf("Failed to check database initialization:%v", err)
 		return false
 	}
 	return count == 2 // folders, files 두 테이블이 모두 있어야 true 반환
@@ -247,7 +250,7 @@ func execSQLTx(ctx context.Context, tx *sql.Tx, fileName string, args ...interfa
 	}
 
 	// "queries/" 하위의 SQL 파일을 읽어옴.
-	content, err := sqlFiles.ReadFile("queries/" + fileName)
+	content, err := fs.ReadFile(sqlFiles, "queries/"+fileName)
 	if err != nil {
 		return fmt.Errorf("failed to read SQL file (%s): %w", fileName, err)
 	}
@@ -278,7 +281,7 @@ func execSQL(ctx context.Context, db *sql.DB, fileName string, args ...interface
 	}
 
 	// "queries/" 하위의 SQL 파일을 읽어옴.
-	content, err := sqlFiles.ReadFile("queries/" + fileName)
+	content, err := fs.ReadFile(sqlFiles, "queries/"+fileName)
 	if err != nil {
 		return fmt.Errorf("failed to read SQL file (%s): %w", fileName, err)
 	}
@@ -309,7 +312,7 @@ func querySQL(ctx context.Context, db *sql.DB, fileName string, args ...interfac
 	}
 
 	// "queries/" 하위의 SQL 파일을 읽어옴.
-	content, err := sqlFiles.ReadFile("queries/" + fileName)
+	content, err := fs.ReadFile(sqlFiles, "queries/"+fileName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read SQL file (%s): %w", fileName, err)
 	}
@@ -835,7 +838,7 @@ func CompareFiles(db *sql.DB, folderPath string, filesExclusions []string) (bool
 	return unchanged, diskFiles, changes, nil
 }
 
-// UpsertFolder FolderDiff 정보를 기반으로 DB의 폴더 정보를 업데이트하거나, 없으면 삽입합니다.
+// UpsertFolder FolderDiff 정보를 기반으로 DB의 폴더 정보를 업데이트하거나, 없으면 삽입
 func (fd *FolderDiff) UpsertFolder(ctx context.Context, db *sql.DB) error {
 	if fd.FolderID == 0 {
 		// DB에 해당 폴더 정보가 없는 경우: 새 레코드 삽입 (FolderID는 추후 별도 조회로 반영 가능)

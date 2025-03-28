@@ -132,6 +132,76 @@ func (f *dBApisImpl) CompareFoldersAndFiles(ctx context.Context, db *sql.DB) (*b
 	return u.PFalse, folderDiffs, allFileChanges, fbs, nil
 }
 
+// TODO 이렇게 분리 해놓았는데, 테스트를 좀 진행해야 할듯.
+
+func (f *dBApisImpl) CompareFoldersFiles(db *sql.DB) (*bool, [][]string, []d.FolderDiff, []d.FileChange, error) {
+	// 1. 폴더 비교: 폴더 목록과 폴더 간 차이 정보를 가져옴
+	_, folders, folderDiffs, err := d.CompareFolders(db, f.rootDir, f.foldersExclusion, f.filesExclusions)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	var (
+		folderFiles    [][]string
+		allFileChanges []d.FileChange
+	)
+
+	// 2. 각 폴더에 대해 파일 비교
+	for _, folder := range folders {
+		// 파일 비교
+		filesMatch, files, fileChanges, err := d.CompareFiles(db, folder.Path, f.filesExclusions)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		// 해당 폴더에 파일이 다르다면 변경 내역에 추가
+		if !filesMatch {
+			allFileChanges = append(allFileChanges, fileChanges...)
+		}
+
+		// 폴더의 파일 목록을 추출하여 folderFiles 저장
+		fileNames := d.ExtractFileNames(files)
+		// folder.Path 를 key(첫번째 요소)로, 나머지 파일 이름들을 값으로 저장
+		folderFiles = append(folderFiles, append([]string{folder.Path}, fileNames...))
+	}
+
+	// 전체 동일 여부 결정: 폴더 차이와 파일 변경 내역이 없으면 true, 아니면 false
+	overallSame := len(folderDiffs) == 0 && len(allFileChanges) == 0
+	if overallSame {
+		return u.PTrue, folderFiles, nil, nil, nil
+	}
+	return u.PFalse, folderFiles, folderDiffs, allFileChanges, nil
+}
+
+// ConvertFolderFilesToFileBlocks converts a slice of folder-files ([][]string)
+// into a slice of *pb.FileBlock. Each inner slice should have the first element
+// as the folder path and the subsequent elements as file names.
+// The provided headers will be assigned to the FileBlock.ColumnHeaders.
+func ConvertFolderFilesToFileBlocks(folderFiles [][]string, headers []string) ([]*pb.FileBlock, error) {
+	var fileBlocks []*pb.FileBlock
+
+	for _, ff := range folderFiles {
+		// ff가 비어있다면 건너뜀.
+		if len(ff) == 0 {
+			continue
+		}
+		// 첫번째 요소를 폴더 경로로 사용
+		folderPath := ff[0]
+		var fileNames []string
+		if len(ff) > 1 {
+			fileNames = ff[1:]
+		}
+
+		// 기존에 정의한 GenerateFileBlock 함수를 호출하여 FileBlock 생성
+		fb, err := v1rpc.GenerateFileBlock(folderPath, fileNames)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate file block for folder %s: %w", folderPath, err)
+		}
+		// 전달받은 헤더를 할당
+		fb.ColumnHeaders = headers
+		fileBlocks = append(fileBlocks, fb)
+	}
+	return fileBlocks, nil
+}
+
 // UpdateFilesAndFolders 폴더 변경 내역과 파일 변경 내역을 DB에 반영
 func UpdateFilesAndFolders(ctx context.Context, db *sql.DB, diffs []d.FolderDiff, changes []d.FileChange) error {
 	// 폴더 변경 업데이트
