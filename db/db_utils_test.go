@@ -13,40 +13,90 @@ func TestIsDBInitialized(t *testing.T) {
 	// in-memory SQLite 데이터베이스 생성
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
-		t.Fatalf("in-memory DB 생성 실패: %v", err)
+		t.Fatalf("failed to create in-memory DB: %v", err)
 	}
 	defer func() {
 		cErr := db.Close()
 		if cErr != nil {
-			Log.Warnf("failed to db close:%v", cErr)
+			Log.Warnf("failed to db close: %v", cErr)
 		}
 	}()
 
 	// 초기 상태: 아무 테이블도 없으므로 false 여야 함.
 	if isDBInitialized(db) {
-		t.Error("테이블이 없는 DB 에서 isDBInitialized 가 true 를 반환함")
+		t.Error("isDBInitialized returned true on a DB with no tables")
 	}
 
 	// folders 테이블만 생성
 	_, err = db.Exec("CREATE TABLE folders (id INTEGER PRIMARY KEY)")
 	if err != nil {
-		t.Fatalf("folders 테이블 생성 실패: %v", err)
+		t.Fatalf("failed to create folders table: %v", err)
 	}
 
 	// files 테이블이 없으므로 여전히 false 여야 함.
 	if isDBInitialized(db) {
-		t.Error("folders 테이블만 존재할 때 isDBInitialized 가 true 를 반환함")
+		t.Error("isDBInitialized returned true when only folders table exists")
 	}
 
 	// files 테이블 생성
 	_, err = db.Exec("CREATE TABLE files (id INTEGER PRIMARY KEY)")
 	if err != nil {
-		t.Fatalf("files 테이블 생성 실패: %v", err)
+		t.Fatalf("failed to create files table: %v", err)
 	}
 
 	// 이제 folders, files 두 테이블이 모두 존재하므로 true 여야 함.
 	if !isDBInitialized(db) {
-		t.Error("folders 와 files 테이블이 모두 존재함에도 불구하고 isDBInitialized 가 false 를 반환함")
+		t.Error("isDBInitialized returned false even though both folders and files tables exist")
+	}
+}
+
+// TestConnectDB_EnableForeignKeys_Success 는 SQLite in‑memory DB 에서 외래 키 활성화가 정상 동작하는지 검증
+func TestConnectDB_EnableForeignKeys_Success(t *testing.T) {
+	// SQLite in‑memory DB 사용, enableForeignKeys=true
+	db, err := ConnectDB("sqlite3", ":memory:", true)
+	if err != nil {
+		t.Fatalf("failed to connect DB: %v", err)
+	}
+	defer func() {
+		cErr := db.Close()
+		if cErr != nil {
+			Log.Warnf("failed to db close: %v", cErr)
+		}
+	}()
+
+	// 외래 키 활성화 상태 확인
+	row := db.QueryRow("PRAGMA foreign_keys;")
+	var fk int
+	if err := row.Scan(&fk); err != nil {
+		t.Fatalf("failed to query foreign_keys pragma: %v", err)
+	}
+	if fk != 1 {
+		t.Errorf("expected foreign_keys to be enabled (1), got %d", fk)
+	}
+}
+
+// TestConnectDB_DisableForeignKeys 는 SQLite in‑memory DB 에서 외래 키 활성화 옵션을 false 로 설정했을 때 검증
+func TestConnectDB_DisableForeignKeys(t *testing.T) {
+	// SQLite in‑memory DB 사용, enableForeignKeys=false
+	db, err := ConnectDB("sqlite3", ":memory:", false)
+	if err != nil {
+		t.Fatalf("failed to connect DB: %v", err)
+	}
+	defer func() {
+		cErr := db.Close()
+		if cErr != nil {
+			Log.Warnf("failed to db close: %v", cErr)
+		}
+	}()
+
+	// 외래 키 활성화 상태 확인
+	row := db.QueryRow("PRAGMA foreign_keys;")
+	var fk int
+	if err := row.Scan(&fk); err != nil {
+		t.Fatalf("failed to query foreign_keys pragma: %v", err)
+	}
+	if fk != 0 {
+		t.Errorf("expected foreign_keys to be disabled (0), got %d", fk)
 	}
 }
 
@@ -68,10 +118,6 @@ func insertFolderInfo(db *sql.DB, folder Folder) error {
 	_, err := db.Exec(query, folder.Path, folder.TotalSize, folder.FileCount, folder.CreatedTime)
 	return err
 }
-
-// TODO 일단 테스트 방법 부터 일단 고민해보자.
-// InitializeDatabase 테스트 해야함.
-// insertFolderInfo
 
 func TestCompareFolders(t *testing.T) {
 	tempRoot, err := os.MkdirTemp("", "test_compare_folders")

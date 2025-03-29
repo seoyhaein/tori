@@ -39,7 +39,7 @@ func TestExecSQLTx_FileNotFound(t *testing.T) {
 		t.Fatalf("failed to open sqlmock database: %v", err)
 	}
 
-	// 트랜잭션 시작 전에 rollback 을 항상 호출하도록 defer 등록
+	// 트랜잭션 시작 기대 등록 및 실행
 	mock.ExpectBegin()
 	tx, err := db.Begin()
 	if err != nil {
@@ -48,17 +48,17 @@ func TestExecSQLTx_FileNotFound(t *testing.T) {
 
 	// rollback 호출에 대한 기대 등록
 	mock.ExpectRollback()
-	// 실제로 rollback 호출을 위한 defer 구문 추가
+	// 실제 rollback 호출을 위한 defer (tx.Rollback() 호출 시, 이미 완료된 경우 sql.ErrTxDone은 무시)
 	defer func() {
 		if rErr := tx.Rollback(); rErr != nil && !errors.Is(rErr, sql.ErrTxDone) {
 			Log.Warnf("failed to tx Rollback: %v", rErr)
 		}
 	}()
 
-	mock.ExpectClose() // db.Close() 호출에 대한 기대 등록
+	// db.Close() 호출 기대 등록 및 defer 처리
+	mock.ExpectClose()
 	defer func() {
-		cErr := db.Close()
-		if cErr != nil {
+		if cErr := db.Close(); cErr != nil {
 			Log.Warnf("failed to db close: %v", cErr)
 		}
 	}()
@@ -70,6 +70,11 @@ func TestExecSQLTx_FileNotFound(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed to read SQL file") {
 		t.Fatalf("unexpected error message: %v", err)
+	}
+
+	// 모든 기대치가 충족되었는지 확인
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("there were unfulfilled expectations: %v", err)
 	}
 }
 
@@ -584,4 +589,17 @@ func TestQuerySQLNoCtx_Success(t *testing.T) {
 			Log.Warnf("failed to db close: %v", cErr)
 		}
 	}()
+}
+
+// TestConnectDB_NonSQLite 드라이버가 sqlite 가 아니면 에러가 발생하는지 검증
+func TestConnectDB_NonSQLite(t *testing.T) {
+	// "sqlite3"가 아닌 드라이버("sqlmock")를 사용하면 에러를 반환해야 한다.
+	_, err := ConnectDB("sqlmock", "dummy", true)
+	if err == nil {
+		t.Fatalf("expected error when using non-sqlite driver, got nil")
+	}
+	expected := "unsupported driver: sqlmock; only sqlite3 is supported"
+	if err.Error() != expected {
+		t.Fatalf("unexpected error message: got %q, want %q", err.Error(), expected)
+	}
 }

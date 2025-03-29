@@ -199,14 +199,20 @@ type FileChange struct {
 
 // ConnectDB 데이터베이스에 연결하고, enableForeignKeys 가 true 이면 SQLite 사용 시 외래 키 제약 조건을 활성화함.
 func ConnectDB(driverName, dataSourceName string, enableForeignKeys bool) (*sql.DB, error) {
+	// SQLite 외의 드라이버는 지원하지 않음.
+	if driverName != "sqlite3" {
+		return nil, fmt.Errorf("unsupported driver: %s; only sqlite3 is supported", driverName)
+	}
+
 	db, err := sql.Open(driverName, dataSourceName)
 	if err != nil {
 		return nil, err
 	}
-	// SQLite 사용 시, enableForeignKeys 값이 true 이면 외래 키 활성화
-	if driverName == "sqlite3" && enableForeignKeys {
+
+	// enableForeignKeys 가 true 면, SQLite 의 외래 키 제약 조건 활성화
+	if enableForeignKeys {
 		if _, err := db.Exec("PRAGMA foreign_keys = ON;"); err != nil {
-			// 외래 키 활성화 실패 시 db.Close() 호출하고, 그 에러도 함께 처리함.
+			// 외래 키 활성화 실패 시 db.Close() 호출하고, 에러도 함께 처리함.
 			if cErr := db.Close(); cErr != nil {
 				return nil, fmt.Errorf("failed to enable foreign keys: %w; additionally failed to close db: %w", err, cErr)
 			}
