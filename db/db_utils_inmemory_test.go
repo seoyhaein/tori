@@ -632,6 +632,8 @@ func TestStoreFilesFolderInfo_LargeStructureIntegration(t *testing.T) {
 	}
 }
 
+// TODO 폴더 구조 및 반드시 들어가야 할 파일등에 대한 명시가 문서화 되어야 한다. 그리고 파일이나 폴더 구조가 아닐때 알 수 있도록 하는 체크 기능이 필요하다.
+// TODO 지금은 그냥 에러로 처리해버리는데 이렇게 하지 말고 별도로, 사용자에게 고칠 수 있도록 하는 것으로 변경할 필요가 있다.
 // TODO 성능 이슈가 발생할 가능성이 있음. 실제 구현 메서드의 성능 측면을 생각하고 관련 테스트를 더욱 고도화 할 필요가 있을듯. 일단 readme 말고 여기에 남겨 놓음.
 
 func TestStoreFilesFolderInfo_TooLargeStructureIntegration(t *testing.T) {
