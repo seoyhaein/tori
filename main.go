@@ -9,6 +9,7 @@ import (
 	d "github.com/seoyhaein/tori/db"
 	globallog "github.com/seoyhaein/tori/log"
 	"github.com/seoyhaein/tori/v1rpc"
+	"github.com/seoyhaein/tori/v1rpc/server"
 	"os"
 	"path"
 	"path/filepath"
@@ -34,11 +35,11 @@ func init() {
 	}
 
 	//grpc 서버 시작.
-	v1rpc.Address = ":50053"
+	server.Address = ":50053"
 	// gRPC 서버를 별도 고루틴에서 실행하고, 종료 에러를 받을 채널 생성
 	serverErrCh = make(chan error, 1)
 	go func() {
-		err := v1rpc.Server()
+		err := server.Server()
 		serverErrCh <- err
 	}()
 

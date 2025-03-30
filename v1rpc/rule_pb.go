@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	globallog "github.com/seoyhaein/tori/
 	pb "github.com/seoyhaein/tori/protos"
 	u "github.com/seoyhaein/utils"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -15,6 +16,8 @@ import (
 	"strings"
 	"time"
 )
+
+var Log = globallog.Log
 
 // RuleSet 구조체 정의
 type RuleSet struct {

@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 )
 
+// TODO 전역 변수 다른 곳엣 쓰는 문제 한번 생각해보자. 지금 코드가 중복되는 경향이 있음.
+
 var (
 	Config = c.GlobalConfig
 	Db     = d.GlobalDb
@@ -26,6 +28,7 @@ var (
 type DBApis interface {
 	StoreFoldersInfo(ctx context.Context, db *sql.DB) error
 	CompareFoldersAndFiles(ctx context.Context, db *sql.DB) (*bool, []d.FolderDiff, []d.FileChange, []*pb.FileBlock, error)
+	GetDataBlock(ctx context.Context, updateAt *timestamppb.Timestamp) (*pb.DataBlock, error)
 }
 
 // dBApisImpl DBApis 인터페이스의 구현체
@@ -36,11 +39,11 @@ type dBApisImpl struct {
 }
 
 // NewDBApis DBApis 인터페이스의 구현체를 생성하는 factory 함수
-func NewDBApis(rootDir string, foldersExclusion, filesExclusions []string) DBApis {
+func NewDBApis() DBApis {
 	return &dBApisImpl{
-		rootDir:          rootDir,
-		foldersExclusion: foldersExclusion,
-		filesExclusions:  filesExclusions,
+		rootDir:          Config.RootDir,
+		foldersExclusion: nil,
+		filesExclusions:  Config.Exclusions,
 	}
 }
 
@@ -50,7 +53,7 @@ func (f *dBApisImpl) StoreFoldersInfo(ctx context.Context, db *sql.DB) error {
 	return err
 }
 
-// CompareFoldersAndFiles 폴더와 파일을 비교하고, 변경 내역을 반환 TODO 수정해야 함 버그 있음.
+// CompareFoldersAndFiles 폴더와 파일을 비교하고, 변경 내역을 반환 TODO 수정해야 함 버그 있음. 분리한 메서드가 안정적일 경우 삭제 보관.
 func (f *dBApisImpl) CompareFoldersAndFiles(ctx context.Context, db *sql.DB) (*bool, []d.FolderDiff, []d.FileChange, []*pb.FileBlock, error) {
 	// 1. 폴더 비교: 폴더 목록과 폴더 간 차이 정보를 가져옴
 	_, folders, folderDiffs, err := d.CompareFolders(db, f.rootDir, f.foldersExclusion, f.filesExclusions)
@@ -132,7 +135,7 @@ func (f *dBApisImpl) CompareFoldersAndFiles(ctx context.Context, db *sql.DB) (*b
 	return u.PFalse, folderDiffs, allFileChanges, fbs, nil
 }
 
-// TODO 이렇게 분리 해놓았는데, 테스트를 좀 진행해야 할듯.
+// TODO 이렇게 분리 해놓았는데, 테스트를 좀 진행해야 할듯. 여기서 부터 시작 해야함. 중요.
 
 func (f *dBApisImpl) CompareFoldersFiles(db *sql.DB) (*bool, [][]string, []d.FolderDiff, []d.FileChange, error) {
 	// 1. 폴더 비교: 폴더 목록과 폴더 간 차이 정보를 가져옴
@@ -286,16 +289,51 @@ func DeleteFiles(files []string) error {
 	return nil
 }
 
-func GetDataBlock(ctx context.Context, req *pb.GetDataBlockRequest) (*timestamppb.Timestamp, error) {
-	return nil, nil
+func (f *dBApisImpl) GetDataBlock(ctx context.Context, updateAt *timestamppb.Timestamp) (*pb.DataBlock, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	// 서버의 데이터 블록 경로 정리
+	dataBlockPath := filepath.Clean(f.rootDir)
+	dataBlockPath = filepath.Join(dataBlockPath, "datablock.pb")
+
+	// 서버의 데이터 블록 로드
+	dataBlock, err := v1rpc.LoadDataBlock(dataBlockPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load datablock from %s: %w", dataBlockPath, err)
+	}
+
+	// 서버 데이터 블록에 UpdatedAt 필드가 없는 경우 에러 처리
+	if dataBlock.UpdatedAt == nil {
+		return nil, fmt.Errorf("server datablock is missing UpdatedAt field")
+	}
+
+	// 클라이언트가 업데이트 타임스탬프를 제공하지 않으면, 서버 데이터를 반환
+	if updateAt == nil {
+		return dataBlock, nil
+	}
+
+	// 클라이언트와 서버 타임스탬프를 Go의 time.Time 으로 변환
+	clientTime := updateAt.AsTime()
+	serverTime := dataBlock.UpdatedAt.AsTime()
+
+	if clientTime.Before(serverTime) {
+		// 클라이언트 데이터가 구버전이면 서버의 최신 데이터를 반환
+		return dataBlock, nil
+	} else if clientTime.Equal(serverTime) {
+		// 버전이 동일하면 업데이트할 내용이 없으므로 nil 반환
+		return nil, nil
+	} else { // clientTime.After(serverTime)
+		// 클라이언트 데이터가 서버보다 최신하면 에러 반환
+		return nil, fmt.Errorf("client datablock is newer than server version")
+	}
 }
 
 // SyncFoldersInfo  업데이트가 이루어졌으면 true, 그렇지 않으면 false TODO 여기 수정 중.
 func SyncFoldersInfo(ctx context.Context, force bool) (bool, error) {
 
-	// exclusion 은 보안상 여기다가 넣어둠. TODO 일단 생각은 해보자.
-	exclusions := []string{"*.json", "invalid_files", "*.csv", "*.pb"}
-	dbApis := NewDBApis(Config.RootDir, nil, exclusions)
+	dbApis := NewDBApis()
 	err := dbApis.StoreFoldersInfo(ctx, Db)
 	if err != nil {
 		return false, fmt.Errorf("failed to store folders info into db : %v", err)

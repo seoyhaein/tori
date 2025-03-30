@@ -1,9 +1,10 @@
-package v1rpc
+package server
 
 import (
 	"context"
 	"fmt"
 	globallog "github.com/seoyhaein/tori/log"
+	"github.com/seoyhaein/tori/v1rpc/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -101,8 +102,8 @@ func Server() error {
 
 	// 기존: Reflection 서비스 등록, 디버깅 및 grpcurl 노출 위해서.
 	reflection.Register(grpcServer)
-	RegisterDataBlockServiceServer(grpcServer)
-	RegisterDBApisServiceServer(grpcServer)
+	service.RegisterDataBlockServiceServer(grpcServer)
+	service.RegisterDBApisServiceServer(grpcServer)
 	Log.Infof("gRPC server started, address: %s", Address)
 
 	// graceful shutdown 처리 추가

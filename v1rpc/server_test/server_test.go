@@ -1,9 +1,9 @@
-package v1rpc_test
+package server_test_test
 
 import (
 	"context"
 	globallog "github.com/seoyhaein/tori/log"
-	"github.com/seoyhaein/tori/v1rpc"
+	"github.com/seoyhaein/tori/v1rpc/server"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"os"
@@ -15,12 +15,12 @@ import (
 var Log = globallog.Log
 
 func TestServerHealth(t *testing.T) {
-	v1rpc.Address = "localhost:50053"
+	server.Address = "localhost:50053"
 
 	// gRPC 서버를 별도 고루틴에서 실행하고, 종료 에러를 받을 채널 생성
 	serverErrCh := make(chan error, 1)
 	go func() {
-		err := v1rpc.Server()
+		err := server.Server()
 		serverErrCh <- err
 	}()
 
@@ -30,7 +30,7 @@ func TestServerHealth(t *testing.T) {
 	// 서버에 연결 (grpc.DialContext 사용)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	conn, err := grpc.DialContext(ctx, v1rpc.Address, grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.DialContext(ctx, server.Address, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		t.Fatalf("Failed to connect to gRPC server: %v", err)
 	}

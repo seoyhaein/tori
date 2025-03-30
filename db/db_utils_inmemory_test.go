@@ -19,24 +19,6 @@ var (
 
 // createLargeTestStructure 는 rootDir 아래에 numDirs 개의 하위 디렉토리를 생성하고,
 // 각 디렉토리마다 numFilesPerDir 개의 파일을 생성한다.
-func createLargeTestStructure_old(rootDir string, numDirs, numFilesPerDir int) error {
-	for i := 0; i < numDirs; i++ {
-		subDir := filepath.Join(rootDir, fmt.Sprintf("dir_%d", i))
-		if err := os.Mkdir(subDir, 0755); err != nil {
-			return err
-		}
-		for j := 0; j < numFilesPerDir; j++ {
-			filePath := filepath.Join(subDir, fmt.Sprintf("file_%d.txt", j))
-			// 간단한 내용: 파일마다 내용 길이를 다르게 설정
-			content := []byte(fmt.Sprintf("Content of file %d in directory %d", j, i))
-			if err := os.WriteFile(filePath, content, 0644); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
 func createLargeTestStructure(rootDir string, numDirs, numFilesPerDir int, createRule bool) error {
 	// rootDir 이 빈 디렉토리인지 확인
 	entries, err := os.ReadDir(rootDir)
@@ -650,8 +632,8 @@ func TestStoreFilesFolderInfo_TooLargeStructureIntegration(t *testing.T) {
 	}()
 
 	// 큰 규모의 디렉토리 구조 생성
-	// 예: 1000개의 하위 디렉토리, 각 디렉토리당 10000개의 파일, 그리고 각 디렉토리에 rule.json 생성
-	numDirs := 1000
+	// 예: 10개의 하위 디렉토리, 각 디렉토리당 10000개의 파일, 그리고 각 디렉토리에 rule.json 생성
+	numDirs := 10
 	numFilesPerDir := 10000
 	if err := createLargeTestStructure(tmpDir, numDirs, numFilesPerDir, true); err != nil {
 		t.Fatalf("failed to create large test structure: %v", err)

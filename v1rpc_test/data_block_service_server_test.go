@@ -3,7 +3,7 @@ package v1rpc_test
 import (
 	"context"
 	pb "github.com/seoyhaein/tori/protos"
-	"github.com/seoyhaein/tori/v1rpc"
+	"github.com/seoyhaein/tori/v1rpc/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
 	"net"
@@ -23,7 +23,7 @@ func init() {
 	// DataBlockServiceServer 구현체를 등록 (구현체는 NewDataBlockServiceServer()로 생성)
 	// 테스트의 독립성을 위해서 이거 사용하지 않음.
 	// v1rpc.RegisterDataBlockServiceServer(grpcServer)
-	pb.RegisterDataBlockServiceServer(grpcServer, v1rpc.NewDataBlockServiceServer())
+	pb.RegisterDataBlockServiceServer(grpcServer, service.NewDataBlockServiceServer())
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
 			serverErr = err

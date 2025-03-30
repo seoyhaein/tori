@@ -1,4 +1,4 @@
-package v1rpc
+package service
 
 import (
 	"context"

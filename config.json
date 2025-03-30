@@ -1,4 +1,4 @@
 {
-  "MaxWatchCount": 10,
-  "rootDir": "/test/"
+  "rootDir": "/test/",
+  "exclusions": ["*.json", "invalid_files", "*.csv", "*.pb"]
 }
