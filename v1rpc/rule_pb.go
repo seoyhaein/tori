@@ -4,7 +4,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	globallog "github.com/seoyhaein/tori/
+	globallog "github.com/seoyhaein/tori/log"
 	pb "github.com/seoyhaein/tori/protos"
 	u "github.com/seoyhaein/utils"
 	"google.golang.org/protobuf/encoding/prototext"
