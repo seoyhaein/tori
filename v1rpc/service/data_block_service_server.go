@@ -14,6 +14,10 @@ type dataBlockServiceServerImpl struct {
 	dbApis api.DBApis
 }
 
+// TODO 중요. 이거 반드시 처리 해야함.
+// TODO NewDBApis 는 main 의 init 에서 config 처리를 함으로 테스트의 경우 에러 날 수 있음. 이거 보안하는 방향으로 처리 해야함.
+// TODO init 처리 할때 main 에서만 처리하지 말고 다른 패키지에서 처리하는 방향을 생각해봐.
+
 // NewDataBlockServiceServer 는 DataBlockServiceServer 의 새로운 인스턴스를 반환
 func NewDataBlockServiceServer() pb.DataBlockServiceServer {
 	return &dataBlockServiceServerImpl{
