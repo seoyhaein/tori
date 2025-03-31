@@ -39,29 +39,13 @@ func TestExecSQLTx_FileNotFound(t *testing.T) {
 		t.Fatalf("failed to open sqlmock database: %v", err)
 	}
 
-	// 트랜잭션 시작 기대 등록 및 실행
 	mock.ExpectBegin()
 	tx, err := db.Begin()
 	if err != nil {
 		t.Fatalf("failed to begin transaction: %v", err)
 	}
 
-	// rollback 호출에 대한 기대 등록
 	mock.ExpectRollback()
-	// 실제 rollback 호출을 위한 defer (tx.Rollback() 호출 시, 이미 완료된 경우 sql.ErrTxDone은 무시)
-	defer func() {
-		if rErr := tx.Rollback(); rErr != nil && !errors.Is(rErr, sql.ErrTxDone) {
-			Log.Warnf("failed to tx Rollback: %v", rErr)
-		}
-	}()
-
-	// db.Close() 호출 기대 등록 및 defer 처리
-	mock.ExpectClose()
-	defer func() {
-		if cErr := db.Close(); cErr != nil {
-			Log.Warnf("failed to db close: %v", cErr)
-		}
-	}()
 
 	// 존재하지 않는 파일을 지정하여 에러가 발생하는지 검증
 	err = execSQLTx(context.Background(), tx, "nonexistent.sql")
@@ -72,7 +56,17 @@ func TestExecSQLTx_FileNotFound(t *testing.T) {
 		t.Fatalf("unexpected error message: %v", err)
 	}
 
-	// 모든 기대치가 충족되었는지 확인
+	// 여기서 명시적으로 rollback을 호출해서 기대를 만족시킴.
+	if rErr := tx.Rollback(); rErr != nil && !errors.Is(rErr, sql.ErrTxDone) {
+		logger.Warnf("failed to tx Rollback: %v", rErr)
+	}
+
+	mock.ExpectClose()
+	if cErr := db.Close(); cErr != nil {
+		logger.Warnf("failed to db close: %v", cErr)
+	}
+
+	// 이제 모든 기대치가 충족되었는지 확인
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("there were unfulfilled expectations: %v", err)
 	}
@@ -96,7 +90,7 @@ func TestExecSQLTx_EmptyFile(t *testing.T) {
 	// 실제로 rollback 호출을 위한 defer 구문 추가
 	defer func() {
 		if rErr := tx.Rollback(); rErr != nil && !errors.Is(rErr, sql.ErrTxDone) {
-			Log.Warnf("failed to tx Rollback: %v", rErr)
+			logger.Warnf("failed to tx Rollback: %v", rErr)
 		}
 	}()
 
@@ -104,7 +98,7 @@ func TestExecSQLTx_EmptyFile(t *testing.T) {
 	defer func() {
 		cErr := db.Close()
 		if cErr != nil {
-			Log.Warnf("failed to db close: %v", cErr)
+			logger.Warnf("failed to db close: %v", cErr)
 		}
 	}()
 
@@ -156,7 +150,7 @@ func TestExecSQLTx_Success(t *testing.T) {
 	// 실제로 rollback 호출을 위한 defer 구문 추가
 	defer func() {
 		if rErr := tx.Rollback(); rErr != nil && !errors.Is(rErr, sql.ErrTxDone) {
-			Log.Warnf("failed to tx Rollback: %v", rErr)
+			logger.Warnf("failed to tx Rollback: %v", rErr)
 		}
 	}()
 
@@ -164,7 +158,7 @@ func TestExecSQLTx_Success(t *testing.T) {
 	mock.ExpectClose()
 	defer func() {
 		if cErr := db.Close(); cErr != nil {
-			Log.Warnf("failed to db close: %v", cErr)
+			logger.Warnf("failed to db close: %v", cErr)
 		}
 	}()
 }
@@ -208,7 +202,7 @@ func TestExecSQLTx_QueryExecutionError(t *testing.T) {
 	// 실제로 rollback 호출을 위한 defer 구문 추가
 	defer func() {
 		if rErr := tx.Rollback(); rErr != nil && !errors.Is(rErr, sql.ErrTxDone) {
-			Log.Warnf("failed to tx Rollback: %v", rErr)
+			logger.Warnf("failed to tx Rollback: %v", rErr)
 		}
 	}()
 
@@ -216,7 +210,7 @@ func TestExecSQLTx_QueryExecutionError(t *testing.T) {
 	defer func() {
 		cErr := db.Close()
 		if cErr != nil {
-			Log.Warnf("failed to db close: %v", cErr)
+			logger.Warnf("failed to db close: %v", cErr)
 		}
 	}()
 }
@@ -257,7 +251,7 @@ func TestExecSQLTxNoCtx_Success(t *testing.T) {
 	// 실제로 rollback 호출을 위한 defer 구문 추가
 	defer func() {
 		if rErr := tx.Rollback(); rErr != nil && !errors.Is(rErr, sql.ErrTxDone) {
-			Log.Warnf("failed to tx Rollback: %v", rErr)
+			logger.Warnf("failed to tx Rollback: %v", rErr)
 		}
 	}()
 
@@ -265,7 +259,7 @@ func TestExecSQLTxNoCtx_Success(t *testing.T) {
 	defer func() {
 		cErr := db.Close()
 		if cErr != nil {
-			Log.Warnf("failed to db close: %v", cErr)
+			logger.Warnf("failed to db close: %v", cErr)
 		}
 	}()
 }
@@ -285,7 +279,7 @@ func TestExecSQL_FileNotFound(t *testing.T) {
 	defer func() {
 		cErr := db.Close()
 		if cErr != nil {
-			Log.Warnf("failed to db close: %v", cErr)
+			logger.Warnf("failed to db close: %v", cErr)
 		}
 	}()
 
@@ -317,7 +311,7 @@ func TestExecSQL_EmptyFile(t *testing.T) {
 	defer func() {
 		cErr := db.Close()
 		if cErr != nil {
-			Log.Warnf("failed to db close: %v", cErr)
+			logger.Warnf("failed to db close: %v", cErr)
 		}
 	}()
 }
@@ -349,7 +343,7 @@ func TestExecSQL_Success(t *testing.T) {
 	defer func() {
 		cErr := db.Close()
 		if cErr != nil {
-			Log.Warnf("failed to db close: %v", cErr)
+			logger.Warnf("failed to db close: %v", cErr)
 		}
 	}()
 }
@@ -386,7 +380,7 @@ func TestExecSQL_QueryExecutionError(t *testing.T) {
 	defer func() {
 		cErr := db.Close()
 		if cErr != nil {
-			Log.Warnf("failed to db close: %v", cErr)
+			logger.Warnf("failed to db close: %v", cErr)
 		}
 	}()
 }
@@ -418,7 +412,7 @@ func TestExecSQLNoCtx_Success(t *testing.T) {
 	defer func() {
 		cErr := db.Close()
 		if cErr != nil {
-			Log.Warnf("failed to db close: %v", cErr)
+			logger.Warnf("failed to db close: %v", cErr)
 		}
 	}()
 }
@@ -438,7 +432,7 @@ func TestQuerySQL_FileNotFound(t *testing.T) {
 	defer func() {
 		cErr := db.Close()
 		if cErr != nil {
-			Log.Warnf("failed to db close: %v", cErr)
+			logger.Warnf("failed to db close: %v", cErr)
 		}
 	}()
 
@@ -462,7 +456,7 @@ func TestQuerySQL_EmptyFile(t *testing.T) {
 	defer func() {
 		cErr := db.Close()
 		if cErr != nil {
-			Log.Warnf("failed to db close: %v", cErr)
+			logger.Warnf("failed to db close: %v", cErr)
 		}
 	}()
 
@@ -498,7 +492,7 @@ func TestQuerySQL_Success(t *testing.T) {
 	}
 	defer func() {
 		if cErr := result.Close(); cErr != nil {
-			Log.Warnf("failed to close result: %v", cErr)
+			logger.Warnf("failed to close result: %v", cErr)
 		}
 	}()
 
@@ -510,7 +504,7 @@ func TestQuerySQL_Success(t *testing.T) {
 	defer func() {
 		cErr := db.Close()
 		if cErr != nil {
-			Log.Warnf("failed to db close: %v", cErr)
+			logger.Warnf("failed to db close: %v", cErr)
 		}
 	}()
 }
@@ -547,7 +541,7 @@ func TestQuerySQL_QueryError(t *testing.T) {
 	defer func() {
 		cErr := db.Close()
 		if cErr != nil {
-			Log.Warnf("failed to db close: %v", cErr)
+			logger.Warnf("failed to db close: %v", cErr)
 		}
 	}()
 }
@@ -574,7 +568,7 @@ func TestQuerySQLNoCtx_Success(t *testing.T) {
 	}
 	defer func() {
 		if cErr := result.Close(); cErr != nil {
-			Log.Warnf("failed to close result: %v", cErr)
+			logger.Warnf("failed to close result: %v", cErr)
 		}
 	}()
 
@@ -586,7 +580,7 @@ func TestQuerySQLNoCtx_Success(t *testing.T) {
 	defer func() {
 		cErr := db.Close()
 		if cErr != nil {
-			Log.Warnf("failed to db close: %v", cErr)
+			logger.Warnf("failed to db close: %v", cErr)
 		}
 	}()
 }

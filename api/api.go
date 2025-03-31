@@ -16,47 +16,32 @@ import (
 	"path/filepath"
 )
 
-// TODO 전역 변수 다른 곳엣 쓰는 문제 한번 생각해보자. 지금 코드가 중복되는 경향이 있음.
-
 var (
-	Config = c.GlobalConfig
-	Db     = d.GlobalDb
-	logger = globallog.Log
+	gConfig = c.GlobalConfig
+	Db      = d.GlobalDb
+	logger  = globallog.Log
 )
 
-// DBApis 데이터베이스와 관련된 인터페이스
+// DBApis 데이터베이스와 관련된 인터페이스 grpc 연결 및 cli 연결 목적
 type DBApis interface {
 	StoreFoldersInfo(ctx context.Context, db *sql.DB) error
 	CompareFoldersAndFiles(ctx context.Context, db *sql.DB) (*bool, []d.FolderDiff, []d.FileChange, []*pb.FileBlock, error)
 	GetDataBlock(ctx context.Context, updateAt *timestamppb.Timestamp) (*pb.DataBlock, error)
+	SyncFoldersInfo(ctx context.Context) (bool, error)
 }
 
 // dBApisImpl DBApis 인터페이스의 구현체
-type dBApisImpl struct {
-	rootDir          string // 내부적으로 사용할 폴더 경로 (예: config.RootDir)
-	foldersExclusion []string
-	filesExclusions  []string
-}
+type dBApisImpl struct{}
 
 // NewDBApis DBApis 인터페이스의 구현체를 생성하는 factory 함수
 func NewDBApis() DBApis {
-	return &dBApisImpl{
-		rootDir:          Config.RootDir,
-		foldersExclusion: nil,
-		filesExclusions:  Config.Exclusions,
-	}
+	return &dBApisImpl{}
 }
 
-// StoreFoldersInfo 폴더 정보를 DB에 저장
-func (f *dBApisImpl) StoreFoldersInfo(ctx context.Context, db *sql.DB) error {
-	err := d.StoreFoldersInfo(ctx, db, f.rootDir, f.foldersExclusion, f.filesExclusions)
-	return err
-}
-
-// CompareFoldersAndFiles 폴더와 파일을 비교하고, 변경 내역을 반환 TODO 수정해야 함 버그 있음. 분리한 메서드가 안정적일 경우 삭제 보관.
+// CompareFoldersAndFiles 폴더와 파일을 비교하고, 변경 내역을 반환 TODO 수정해야 함 버그 있음. 분리한 메서드가 안정적일 경우 삭제 보관. 아직 지우지 말것. 파일 체크하는 것 구현 안된것 같음.
 func (f *dBApisImpl) CompareFoldersAndFiles(ctx context.Context, db *sql.DB) (*bool, []d.FolderDiff, []d.FileChange, []*pb.FileBlock, error) {
 	// 1. 폴더 비교: 폴더 목록과 폴더 간 차이 정보를 가져옴
-	_, folders, folderDiffs, err := d.CompareFolders(db, f.rootDir, f.foldersExclusion, f.filesExclusions)
+	_, folders, folderDiffs, err := d.CompareFolders(db, gConfig.RootDir, nil, gConfig.Exclusions)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -67,7 +52,7 @@ func (f *dBApisImpl) CompareFoldersAndFiles(ctx context.Context, db *sql.DB) (*b
 	// 2. 각 폴더에 대해 파일 비교
 	for _, folder := range folders {
 		// 파일 비교
-		filesMatch, files, fileChanges, err := d.CompareFiles(db, folder.Path, f.filesExclusions)
+		filesMatch, files, fileChanges, err := d.CompareFiles(db, folder.Path, gConfig.Exclusions)
 		if err != nil {
 			return nil, nil, nil, nil, err
 		}
@@ -135,11 +120,10 @@ func (f *dBApisImpl) CompareFoldersAndFiles(ctx context.Context, db *sql.DB) (*b
 	return u.PFalse, folderDiffs, allFileChanges, fbs, nil
 }
 
-// TODO 이렇게 분리 해놓았는데, 테스트를 좀 진행해야 할듯. 여기서 부터 시작 해야함. 중요.
-
-func (f *dBApisImpl) CompareFoldersFiles(db *sql.DB) (*bool, [][]string, []d.FolderDiff, []d.FileChange, error) {
+// CompareFoldersFiles 비교했을때, 에러면 *bool 은 nil, 동일하면 true, 다르면 false TODO 수정해야함.
+func CompareFoldersFiles(db *sql.DB) (*bool, [][]string, []d.FolderDiff, []d.FileChange, error) {
 	// 1. 폴더 비교: 폴더 목록과 폴더 간 차이 정보를 가져옴
-	_, folders, folderDiffs, err := d.CompareFolders(db, f.rootDir, f.foldersExclusion, f.filesExclusions)
+	_, folders, folderDiffs, err := d.CompareFolders(db, gConfig.RootDir, nil, gConfig.Exclusions)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -151,7 +135,7 @@ func (f *dBApisImpl) CompareFoldersFiles(db *sql.DB) (*bool, [][]string, []d.Fol
 	// 2. 각 폴더에 대해 파일 비교
 	for _, folder := range folders {
 		// 파일 비교
-		filesMatch, files, fileChanges, err := d.CompareFiles(db, folder.Path, f.filesExclusions)
+		filesMatch, files, fileChanges, err := d.CompareFiles(db, folder.Path, gConfig.Exclusions)
 		if err != nil {
 			return nil, nil, nil, nil, err
 		}
@@ -289,13 +273,19 @@ func DeleteFiles(files []string) error {
 	return nil
 }
 
+// StoreFoldersInfo 폴더 정보를 DB에 저장 TODO 이거 보강해서 구현해줘야 함. grpc 연결 해줘야함.
+func (f *dBApisImpl) StoreFoldersInfo(ctx context.Context, db *sql.DB) error {
+	err := d.StoreFoldersInfo(ctx, db, gConfig.RootDir, nil, gConfig.Exclusions)
+	return err
+}
+
 func (f *dBApisImpl) GetDataBlock(ctx context.Context, updateAt *timestamppb.Timestamp) (*pb.DataBlock, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
 	// 서버의 데이터 블록 경로 정리
-	dataBlockPath := filepath.Clean(f.rootDir)
+	dataBlockPath := filepath.Clean(gConfig.RootDir)
 	dataBlockPath = filepath.Join(dataBlockPath, "datablock.pb")
 
 	// 서버의 데이터 블록 로드
@@ -331,40 +321,45 @@ func (f *dBApisImpl) GetDataBlock(ctx context.Context, updateAt *timestamppb.Tim
 }
 
 // SyncFoldersInfo  업데이트가 이루어졌으면 true, 그렇지 않으면 false TODO 여기 수정 중.
-func SyncFoldersInfo(ctx context.Context, force bool) (bool, error) {
-
-	dbApis := NewDBApis()
-	err := dbApis.StoreFoldersInfo(ctx, Db)
+func (f *dBApisImpl) SyncFoldersInfo(ctx context.Context) (bool, error) {
+	// TODO 아예 없을때 어떻게 되는지 테스트 해야함.
+	b, folderFiles, fDiff, fChange, err := CompareFoldersFiles(Db)
 	if err != nil {
-		return false, fmt.Errorf("failed to store folders info into db : %v", err)
-	}
-	// force 가 true 이면 동기화 시킴.
-	if force {
-
-	}
-
-	b, fDiff, fChange, fb, err := dbApis.CompareFoldersAndFiles(ctx, Db)
-	if err != nil {
-		logger.Fatalf("폴더와 파일을 비교하고, 변경 내역을 반환 실패: %v", err)
+		// 이때 b 는 nil 일 것임.
+		logger.Fatalf("failed to run CompareFoldersFiles : %v", err)
+		return false, err
 	}
 
 	if b != nil && *b {
 		// 전체 폴더와 파일이 동일한 경우 (b가 true)
-		fmt.Println("모든 폴더와 파일이 동일합니다.")
+		logger.Info("all files and folders are same.")
 		// 여기서 fileBlocks 등 추가 처리를 할 수 있습니다.
 	} else if b != nil && !*b {
+		// TODO 확인해보기  여기는 db 업데이트
 		if err = UpdateFilesAndFolders(ctx, Db, fDiff, fChange); err != nil {
-			os.Exit(1)
+			return false, err
 		}
-	} else {
-		// err 가 not nil 이면 b 는 nil 임. 중복됨.
-		os.Exit(1)
-	}
-	// fileblock 을 merge 해서 datablcok 으로 만들고 이후 파일로 저장함.
-	outputDatablock := filepath.Join(Config.RootDir, "datablock.pb")
-	if err = SaveDataBlock(fb, outputDatablock); err != nil {
-		os.Exit(1)
 	}
 
-	return false, nil
+	// TODO db 내용이 겹치는지는 일단 확인해봐야 함. 지우지 말것. 아래 메서드는 초기화 메서드 구별해줘야 함.
+	/*	err := d.StoreFoldersInfo(ctx, Db)
+		if err != nil {
+			return false, fmt.Errorf("failed to store folders info into db : %v", err)
+		}*/
+
+	// fileblock 및 datablock 만들어 줘야 함.
+	testHeader := []string{"r1", "r2"}
+	// TODO 확인해야 함. fileblock 은 일단 생성됨.
+	fbs, err := ConvertFolderFilesToFileBlocks(folderFiles, testHeader)
+	if err != nil {
+		return false, err
+	}
+
+	// fileblock 을 merge 해서 datablcok 으로 만들고 이후 파일로 저장함.
+	outputDatablock := filepath.Join(gConfig.RootDir, "datablock.pb")
+	if err = SaveDataBlock(fbs, outputDatablock); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }

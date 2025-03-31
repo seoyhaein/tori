@@ -21,13 +21,13 @@ func TestSaveProtoToFile(t *testing.T) {
 	// 테스트 종료 시 파일 삭제
 	cErr := tmpFile.Close()
 	if cErr != nil {
-		Log.Warnf("failed to close temp file: %v", cErr)
+		logger.Warnf("failed to close temp file: %v", cErr)
 	}
 
 	defer func() {
 		rErr := os.Remove(tmpFilePath)
 		if rErr != nil {
-			Log.Warnf("failed to remove temp file: %v", rErr)
+			logger.Warnf("failed to remove temp file: %v", rErr)
 		}
 	}()
 
@@ -77,7 +77,7 @@ func TestLoadFileBlock(t *testing.T) {
 	// 테스트 종료 시 임시 파일 삭제
 	defer func() {
 		if rErr := os.Remove(tmpFilePath); rErr != nil {
-			Log.Warnf("failed to remove temp file: %v", rErr)
+			logger.Warnf("failed to remove temp file: %v", rErr)
 		}
 	}()
 
@@ -100,7 +100,7 @@ func TestLoadFileBlock(t *testing.T) {
 	data, err := proto.Marshal(originalMsg)
 	if err != nil {
 
-		Log.Warnf("failed to marshal FileBlockData: %v", err)
+		logger.Warnf("failed to marshal FileBlockData: %v", err)
 	}
 
 	// 임시 파일에 직렬화한 데이터를 기록

@@ -18,7 +18,7 @@ func TestIsDBInitialized(t *testing.T) {
 	defer func() {
 		cErr := db.Close()
 		if cErr != nil {
-			Log.Warnf("failed to db close: %v", cErr)
+			logger.Warnf("failed to db close: %v", cErr)
 		}
 	}()
 
@@ -60,7 +60,7 @@ func TestConnectDB_EnableForeignKeys_Success(t *testing.T) {
 	defer func() {
 		cErr := db.Close()
 		if cErr != nil {
-			Log.Warnf("failed to db close: %v", cErr)
+			logger.Warnf("failed to db close: %v", cErr)
 		}
 	}()
 
@@ -85,7 +85,7 @@ func TestConnectDB_DisableForeignKeys(t *testing.T) {
 	defer func() {
 		cErr := db.Close()
 		if cErr != nil {
-			Log.Warnf("failed to db close: %v", cErr)
+			logger.Warnf("failed to db close: %v", cErr)
 		}
 	}()
 
@@ -126,7 +126,7 @@ func TestCompareFolders(t *testing.T) {
 	}
 	defer func() {
 		if err := os.RemoveAll(tempRoot); err != nil {
-			Log.Warnf("failed to RemoveAll: %v", err)
+			logger.Warnf("failed to RemoveAll: %v", err)
 		}
 	}()
 
@@ -141,11 +141,11 @@ func TestCompareFolders(t *testing.T) {
 	}
 	defer func() {
 		if err := dbConn.Close(); err != nil {
-			Log.Warnf("failed to close DB: %v", err)
+			logger.Warnf("failed to close DB: %v", err)
 		}
 	}()
 
-	// 종속성인 InitializeDatabase 실패 시 테스트를 건너뜁니다.
+	// 종속성인 InitializeDatabase 실패 시 테스트를 건너뜀.
 	if err := InitializeDatabase(dbConn); err != nil {
 		t.Skipf("Skipping tests because InitializeDatabase failed: %v", err)
 	}

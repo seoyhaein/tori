@@ -5,6 +5,8 @@ import (
 	"fmt"
 	globallog "github.com/seoyhaein/tori/log"
 	"os"
+	"path/filepath"
+	"runtime"
 )
 
 type Config struct {
@@ -18,8 +20,19 @@ var (
 )
 
 func init() {
-	// config 설정
-	config, err := LoadConfig("config.json")
+	wd, err := os.Getwd()
+	if err != nil {
+		fmt.Printf("failed to get working directory: %v\n", err)
+	} else {
+		fmt.Printf("Current working directory: %s\n", wd)
+	}
+
+	// config 설정 TODO 추후 배포시에 설정해줘야 함.
+	cfgFile := os.Getenv("CONFIG_FILE")
+	if cfgFile == "" {
+		cfgFile = defaultConfigPath()
+	}
+	config, err := LoadConfig(cfgFile)
 	// Important 기억하자. os.Exit(1) 로만 하지 말고 Log.Fatalf 를 써서 오류 사항을 명확히 하자. 자체적으로 os.Exit(1) 처리됨.
 	if err != nil {
 		logger.Fatalf("failed to load config file %v", err)
@@ -56,4 +69,14 @@ func LoadConfig(filename string) (cfg *Config, err error) {
 	}
 
 	return &config, nil
+}
+
+// defaultConfigPath 는 config.go 파일 기준으로 config.json 파일의 경로를 유추한다.
+func defaultConfigPath() string {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		// Caller 실패 시 기본값 반환
+		return "config.json"
+	}
+	return filepath.Join(filepath.Dir(filename), "config.json")
 }

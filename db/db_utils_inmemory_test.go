@@ -371,7 +371,7 @@ func TestStoreFilesFolderInfo_Integration_RealDirectory(t *testing.T) {
 	defer func() {
 		rErr := os.RemoveAll(tmpDir)
 		if rErr != nil {
-			Log.Warnf("failed to remove tmp directories %v", rErr)
+			logger.Warnf("failed to remove tmp directories %v", rErr)
 		}
 	}()
 
@@ -449,7 +449,7 @@ func TestStoreFilesFolderInfo_Integration_RealDirectory(t *testing.T) {
 	defer func(rows *sql.Rows) {
 		cErr := rows.Close()
 		if cErr != nil {
-			Log.Warnf("failed to rows closed %v", cErr)
+			logger.Warnf("failed to rows closed %v", cErr)
 		}
 	}(rows)
 
@@ -744,3 +744,5 @@ func TestStoreFilesFolderInfo_TooLargeStructureIntegration(t *testing.T) {
 		}
 	}
 }
+
+// TODO CompareFoldersFiles 이거 테스트 코드 만들어야 함. DB 가 없을때 어떻게 되는지. 즉 테이블은 있는데 안에 내용이 없을때 어떻게 되는지. 특정 테이블만 있을때 등등.

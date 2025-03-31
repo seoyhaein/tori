@@ -19,6 +19,8 @@ import (
 
 var logger = globallog.Log
 
+// Important: rule 의 경우 디렉토리마다 달라질 수 있다. 따라서 config 처럼 작성하면 안됨. 잊어버릴것 같아 남겨둠.
+
 // RuleSet 구조체 정의
 type RuleSet struct {
 	Version     string      `json:"version"`
