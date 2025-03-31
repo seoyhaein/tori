@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-var Log = globallog.Log
+var logger = globallog.Log
 
 func TestServerHealth(t *testing.T) {
 	server.Address = "localhost:50053"
@@ -37,7 +37,7 @@ func TestServerHealth(t *testing.T) {
 	defer func(conn *grpc.ClientConn) {
 		cErr := conn.Close()
 		if cErr != nil {
-			Log.Warnf("Failed to close gRPC connection: %v", cErr)
+			logger.Warnf("Failed to close gRPC connection: %v", cErr)
 		}
 	}(conn)
 

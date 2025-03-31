@@ -21,7 +21,7 @@ import (
 var (
 	Config = c.GlobalConfig
 	Db     = d.GlobalDb
-	Log    = globallog.Log
+	logger = globallog.Log
 )
 
 // DBApis 데이터베이스와 관련된 인터페이스
@@ -345,7 +345,7 @@ func SyncFoldersInfo(ctx context.Context, force bool) (bool, error) {
 
 	b, fDiff, fChange, fb, err := dbApis.CompareFoldersAndFiles(ctx, Db)
 	if err != nil {
-		Log.Fatalf("폴더와 파일을 비교하고, 변경 내역을 반환 실패: %v", err)
+		logger.Fatalf("폴더와 파일을 비교하고, 변경 내역을 반환 실패: %v", err)
 	}
 
 	if b != nil && *b {

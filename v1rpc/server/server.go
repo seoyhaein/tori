@@ -25,8 +25,8 @@ const (
 )
 
 var (
-	Address = ":50052"
-	Log     = globallog.Log
+	Address = ":50052" // default value
+	logger  = globallog.Log
 )
 
 func init() {
@@ -41,7 +41,7 @@ func getEnvInt(key string, defaultVal int) int {
 	}
 	val, err := strconv.Atoi(s)
 	if err != nil {
-		Log.Infof("Invalid value for %s: %v. Using default: %d", key, err, defaultVal)
+		logger.Infof("Invalid value for %s: %v. Using default: %d", key, err, defaultVal)
 		return defaultVal
 	}
 	return val
@@ -54,10 +54,10 @@ func loggingInterceptor(
 	info *grpc.UnaryServerInfo,
 	handler grpc.UnaryHandler,
 ) (interface{}, error) {
-	Log.Infof("Received request for %s", info.FullMethod)
+	logger.Infof("Received request for %s", info.FullMethod)
 	resp, err := handler(ctx, req)
 	if err != nil {
-		Log.Infof("Method %s error: %v", info.FullMethod, err)
+		logger.Infof("Method %s error: %v", info.FullMethod, err)
 	}
 	return resp, err
 }
@@ -104,14 +104,14 @@ func Server() error {
 	reflection.Register(grpcServer)
 	service.RegisterDataBlockServiceServer(grpcServer)
 	service.RegisterDBApisServiceServer(grpcServer)
-	Log.Infof("gRPC server started, address: %s", Address)
+	logger.Infof("gRPC server started, address: %s", Address)
 
 	// graceful shutdown 처리 추가
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		sig := <-sigCh
-		Log.Infof("Received signal: %v. Initiating graceful shutdown...", sig)
+		logger.Infof("Received signal: %v. Initiating graceful shutdown...", sig)
 		// GracefulStop 은 현재 처리 중인 요청을 모두 완료한 후 서버를 중지함.
 		grpcServer.GracefulStop()
 	}()
@@ -120,9 +120,9 @@ func Server() error {
 	serveErr := grpcServer.Serve(lis)
 	if serveErr != nil {
 		if !strings.Contains(serveErr.Error(), "use of closed network connection") {
-			Log.Infof("gRPC server returned with error: %v", serveErr)
+			logger.Infof("gRPC server returned with error: %v", serveErr)
 		} else {
-			Log.Infof("gRPC server is shut down")
+			logger.Infof("gRPC server is shut down")
 		}
 	}
 	return serveErr

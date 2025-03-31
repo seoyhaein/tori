@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-var Log = globallog.Log
+var logger = globallog.Log
 
 // RuleSet 구조체 정의
 type RuleSet struct {
@@ -228,7 +228,7 @@ func ValidateRuleSet(ruleSet RuleSet) bool {
 	// Check for conflicts - any index used in more than one role is a conflict
 	for idx, roles := range usageMap {
 		if len(roles) > 1 {
-			Log.Infof("Conflict detected: part %d is used in multiple roles: %v", idx, roles)
+			logger.Infof("Conflict detected: part %d is used in multiple roles: %v", idx, roles)
 			hasConflict = true
 		}
 	}

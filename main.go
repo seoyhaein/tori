@@ -18,8 +18,8 @@ import (
 var (
 	db          *sql.DB
 	serverErrCh chan error
-	Log         = globallog.Log
-	Config      = c.GlobalConfig
+	logger      = globallog.Log
+	gConfig     = c.GlobalConfig
 	btest       bool
 )
 
@@ -28,10 +28,10 @@ func init() {
 	var dbErr error
 	db, dbErr = d.ConnectDB("sqlite3", "file_monitor.db", true)
 	if dbErr != nil {
-		Log.Fatalf("fail to connect sqlite3 %v", dbErr)
+		logger.Fatalf("fail to connect sqlite3 %v", dbErr)
 	}
 	if dbErr = d.InitializeDatabase(db); dbErr != nil {
-		Log.Fatalf("fail to initialize sqlite3 %v", dbErr)
+		logger.Fatalf("fail to initialize sqlite3 %v", dbErr)
 	}
 
 	//grpc 서버 시작.
@@ -43,13 +43,6 @@ func init() {
 		serverErrCh <- err
 	}()
 
-	// config 설정
-	config, err := c.LoadConfig("config.json")
-	// Important 기억하자. os.Exit(1) 로만 하지 말고 Log.Fatalf 를 써서 오류 사항을 명확히 하자. 자체적으로 os.Exit(1) 처리됨.
-	if err != nil {
-		Log.Fatalf("failed to load config file %v", err)
-	}
-	c.GlobalConfig = config
 }
 
 func main() {
@@ -59,7 +52,7 @@ func main() {
 			if cErr := db.Close(); cErr != nil {
 				//log.Fatal("failed to close db:", err)
 
-				Log.Warnf("failed to db closed : %v ", cErr) // defer 내부에서도 os.Exit 사용 가능
+				logger.Warnf("failed to db closed : %v ", cErr) // defer 내부에서도 os.Exit 사용 가능
 			}
 		}
 	}()
@@ -72,7 +65,7 @@ func main() {
 	// TODO 테스트 위해서 만들어둠. true 이면 생성해주고 false 이면 생성안해주는 것으로.
 	btest = false
 	if btest {
-		testFilePath := Config.RootDir
+		testFilePath := gConfig.RootDir
 		testFilePath = filepath.Join(testFilePath, "testFiles/")
 		testFilePath = path.Clean(testFilePath)
 		d.MakeTestFiles(testFilePath)
@@ -98,6 +91,6 @@ func RemoveDBFile(filePath string) error {
 func Shutdown() {
 	err := <-serverErrCh
 	if err != nil {
-		Log.Errorf("Server shutdown returned error: %v", err)
+		logger.Errorf("Server shutdown returned error: %v", err)
 	}
 }

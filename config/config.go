@@ -14,8 +14,18 @@ type Config struct {
 
 var (
 	GlobalConfig *Config
-	Log          = globallog.Log
+	logger       = globallog.Log
 )
+
+func init() {
+	// config 설정
+	config, err := LoadConfig("config.json")
+	// Important 기억하자. os.Exit(1) 로만 하지 말고 Log.Fatalf 를 써서 오류 사항을 명확히 하자. 자체적으로 os.Exit(1) 처리됨.
+	if err != nil {
+		logger.Fatalf("failed to load config file %v", err)
+	}
+	GlobalConfig = config
+}
 
 func LoadConfig(filename string) (cfg *Config, err error) {
 	file, err := os.Open(filename)
@@ -25,7 +35,7 @@ func LoadConfig(filename string) (cfg *Config, err error) {
 	// defer 내에서 err 가 이미 설정되어 있지 않은 경우에만 파일 닫기 에러를 처리
 	defer func() {
 		if cErr := file.Close(); cErr != nil && err == nil {
-			Log.Warnf("failed to close file: %v", cErr)
+			logger.Warnf("failed to close file: %v", cErr)
 		}
 	}()
 
