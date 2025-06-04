@@ -6,7 +6,7 @@ import (
 	"fmt"
 	pb "github.com/seoyhaein/api-protos/gen/go/datablock/ichthys"
 	"github.com/seoyhaein/api-protos/gen/go/datablock/ichthys/service"
-	c "github.com/seoyhaein/tori/config"
+	"github.com/seoyhaein/tori/config"
 	dbUtils "github.com/seoyhaein/tori/db"
 	globallog "github.com/seoyhaein/tori/log"
 	"github.com/seoyhaein/tori/rules"
@@ -16,16 +16,18 @@ import (
 	"path/filepath"
 )
 
-var (
-	gConfig = c.GlobalConfig
-	Db      = dbUtils.GlobalDb
-	logger  = globallog.Log
-)
+var logger = globallog.Log
 
-type DataBlockServiceServerImpl struct{}
+type DataBlockServiceServerImpl struct {
+	cfg *config.Config
+	db  *sql.DB
+}
 
-func NewDataBlockServiceServerImpl() *DataBlockServiceServerImpl {
-	return &DataBlockServiceServerImpl{}
+// TODO 이름이 너무 김.
+
+func NewDataBlockServiceServerImpl(db *sql.DB, cfg *config.Config) *DataBlockServiceServerImpl {
+	return &DataBlockServiceServerImpl{
+		db: db, cfg: cfg}
 }
 
 func (f *DataBlockServiceServerImpl) GetDataBlock(ctx context.Context, updateAt *timestamppb.Timestamp) (*pb.DataBlock, error) {
@@ -34,7 +36,7 @@ func (f *DataBlockServiceServerImpl) GetDataBlock(ctx context.Context, updateAt 
 	}
 
 	// 서버의 데이터 블록 경로 정리
-	dataBlockPath := filepath.Clean(gConfig.RootDir)
+	dataBlockPath := filepath.Clean(f.cfg.RootDir)
 	dataBlockPath = filepath.Join(dataBlockPath, "datablock.pb")
 
 	// 서버의 데이터 블록 로드
@@ -164,101 +166,93 @@ func GenerateFileBlock(filePath string, files []string) (*pb.FileBlock, error) {
 	return fbd, nil
 }
 
-// MergeFileBlocksToDataBlock 여러 개의 파일 블록 파일을 병합하여 하나의 DataBlock 으로 저장
-func MergeFileBlocksToDataBlock(inputFiles []string, outputPbPath string) error {
-	return service.MergeFileBlocks(inputFiles, outputPbPath)
-}
-
-// TODO 아래 내용들은 생각을 해야 함. 중요함 굳이 grpc 로 둘 필요가 있나 라는 생각이 듬.
-// 여기에 다 둠.
-// StoreFoldersInfo
-
-// SaveFolders 폴더 정보를 DB에 저장 TODO 이거 보강해서 구현해줘야 함. grpc 연결 해줘야함.
-func SaveFolders(ctx context.Context, db *sql.DB) error {
-	err := dbUtils.SaveFolders(ctx, db, gConfig.RootDir, nil, gConfig.Exclusions)
+// SaveFolders 폴더 정보를 DB에 저장, TODO 이건 한번만 실행되어야 하는 메서드 임. 이름을 이러한 맥락을 고려해서 넣어 주어야 할듯, 아래 구현되어 있는 메서드들도 이름 수정해줘야 할듯.
+func (f *DataBlockServiceServerImpl) SaveFolders(ctx context.Context) error {
+	err := dbUtils.SaveFolders(ctx, f.db, f.cfg.RootDir, nil, f.cfg.Exclusions)
 	return err
 }
 
-// CompareFoldersAndFiles
-
-// SyncFolders  업데이트가 이루어졌으면 true, 그렇지 않으면 false TODO 여기 수정 중. SyncFoldersInfo 이름 바꿈.
-func SyncFolders(ctx context.Context) (bool, error) {
-	// TODO 아예 없을때 어떻게 되는지 테스트 해야함.
-	b, folderFiles, fDiff, fChange, err := dbUtils.DiffFolders(Db)
+// SyncFolders 업데이트가 이루어졌으면 true, 그렇지 않으면 false
+func (f *DataBlockServiceServerImpl) SyncFolders(ctx context.Context) (bool, error) {
+	// 1) DiffFolders 호출
+	folderFiles, fDiff, fChange, err := dbUtils.DiffFolders(f.db)
 	if err != nil {
-		// 이때 b 는 nil 일 것임.
-		logger.Fatalf("failed to run CompareFoldersFiles : %v", err)
+		logger.Errorf("DiffFolders 실패: %v", err)
 		return false, err
 	}
 
-	if b != nil && *b {
-		// 전체 폴더와 파일이 동일한 경우 (b가 true)
-		logger.Info("all files and folders are same.")
-		// 여기서 fileBlocks 등 추가 처리를 할 수 있습니다.
-	} else if b != nil && !*b {
-		// TODO 확인해보기  여기는 db 업데이트
-		if err = dbUtils.UpdateFilesAndFolders(ctx, Db, fDiff, fChange); err != nil {
-			return false, err
-		}
+	// 2) 변경 없음 시 바로 반환 (FileBlock/DB 업데이트 생략)
+	if fDiff == nil && fChange == nil {
+		logger.Info("all files and folders are same; skipping update and DataBlock generation.")
+		return true, nil
 	}
 
-	// TODO db 내용이 겹치는지는 일단 확인해봐야 함. 지우지 말것. 아래 메서드는 초기화 메서드 구별해줘야 함.
-	/*	err := d.StoreFoldersInfo(ctx, Db)
-		if err != nil {
-			return false, fmt.Errorf("failed to store folders info into db : %v", err)
-		}*/
+	// 3) DB 업데이트
+	if err = dbUtils.UpdateDB(ctx, f.db, fDiff, fChange); err != nil {
+		logger.Errorf("UpdateDB 실패: %v", err)
+		return false, err
+	}
+	// 컨텍스트 취소 여부 확인
+	if ctx.Err() != nil {
+		logger.Warnf("SyncFolders 종료: 컨텍스트 취소 감지 (%v)", ctx.Err())
+		return false, ctx.Err()
+	}
 
-	// fileblock 및 datablock 만들어 줘야 함.
-	testHeader := []string{"r1", "r2"}
-	// TODO 확인해야 함. fileblock 은 일단 생성됨.
-	fbs, err := ConvertFolderFilesToFileBlocks(folderFiles, testHeader)
+	// 4) FileBlock 생성
+	fbs, err := GenerateFBs(folderFiles)
 	if err != nil {
+		logger.Errorf("GenerateFBs 실패: %v", err)
 		return false, err
 	}
+	// 컨텍스트 취소 여부 재확인
+	if ctx.Err() != nil {
+		logger.Warnf("SyncFolders 종료: 컨텍스트 취소 감지 (%v)", ctx.Err())
+		return false, ctx.Err()
+	}
 
-	// fileblock 을 merge 해서 datablcok 으로 만들고 이후 파일로 저장함.
-	outputDatablock := filepath.Join(gConfig.RootDir, "datablock.pb")
-	if err = SaveDataBlock(fbs, outputDatablock); err != nil {
+	// 5) DataBlock 저장
+	outputDatablock := filepath.Join(f.cfg.RootDir, "datablock.pb")
+	if err = GenerateDataBlock(fbs, outputDatablock); err != nil {
+		logger.Errorf("GenerateDataBlock 실패 (%s): %v", outputDatablock, err)
 		return false, err
+	}
+	// 최종 컨텍스트 취소 여부 확인
+	if ctx.Err() != nil {
+		logger.Warnf("SyncFolders 완료 이후 컨텍스트 취소 감지 (%v)", ctx.Err())
+		return false, ctx.Err()
 	}
 
 	return true, nil
 }
 
-// ConvertFolderFilesToFileBlocks converts a slice of folder-files ([][]string)
-// into a slice of *pb.FileBlock. Each inner slice should have the first element
-// as the folder path and the subsequent elements as file names.
-// The provided headers will be assigned to the FileBlock.ColumnHeaders.
-func ConvertFolderFilesToFileBlocks(folderFiles [][]string, headers []string) ([]*pb.FileBlock, error) {
+// GenerateFBs
+func GenerateFBs(folderFiles [][]string) ([]*pb.FileBlock, error) {
 	var fileBlocks []*pb.FileBlock
 
 	for _, ff := range folderFiles {
-		// ff가 비어있다면 건너뜀.
 		if len(ff) == 0 {
 			continue
 		}
-		// 첫번째 요소를 폴더 경로로 사용
 		folderPath := ff[0]
+
 		var fileNames []string
 		if len(ff) > 1 {
 			fileNames = ff[1:]
 		}
 
-		// 기존에 정의한 GenerateFileBlock 함수를 호출하여 FileBlock 생성
 		fb, err := GenerateFileBlock(folderPath, fileNames)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate file block for folder %s: %w", folderPath, err)
 		}
-		// 전달받은 헤더를 할당
-		fb.ColumnHeaders = headers
+
 		fileBlocks = append(fileBlocks, fb)
 	}
 	return fileBlocks, nil
 }
 
-// SaveDataBlock fileblock 을 병합하여 datablcok 으로 저장
+// GenerateDataBlock fileblock 을 병합하여 datablcok 으로 저장
 // outputFile 은 파일이어야 함. 파일이 존재할 경우는 체크 하지 않고 덮어씀.
-func SaveDataBlock(inputBlocks []*pb.FileBlock, outputFile string) error {
+func GenerateDataBlock(inputBlocks []*pb.FileBlock, outputFile string) error {
 	dataBlock, err := service.MergeFileBlocksFromData(inputBlocks)
 	if err != nil {
 		return err

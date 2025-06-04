@@ -346,7 +346,7 @@ func querySQLNoCtx(db *sql.DB, fileName string, args ...interface{}) (*sql.Rows,
 
 // 외부 사용 메서드
 
-// StoreFilesFolderInfo 폴더 경로를 받아 폴더 내 파일 정보를 DB에 삽입하는 함수, TODO 한번만 실행되고 말아야 함.
+// StoreFilesFolderInfo 폴더 경로를 받아 폴더 내 파일 정보를 DB에 삽입하는 함수, TODO 한번만 실행되고 말아야 함. 이름 수정하자.
 func StoreFilesFolderInfo(ctx context.Context, db *sql.DB, folderPath string, exclusions []string) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -931,13 +931,14 @@ func ExtractFileNames(files []File) []string {
 	return names
 }
 
-// DiffFolders 비교했을때, 에러면 *bool 은 nil, 동일하면 true, 다르면 false TODO 수정해야함.
-func DiffFolders(db *sql.DB) (*bool, [][]string, []FolderDiff, []FileChange, error) {
+// DiffFolders 폴더 파일 비교
+func DiffFolders(db *sql.DB) ([][]string, []FolderDiff, []FileChange, error) {
 	// 1. 폴더 비교: 폴더 목록과 폴더 간 차이 정보를 가져옴
 	_, folders, folderDiffs, err := CompareFolders(db, gConfig.RootDir, nil, gConfig.Exclusions)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
+
 	var (
 		folderFiles    [][]string
 		allFileChanges []FileChange
@@ -945,32 +946,28 @@ func DiffFolders(db *sql.DB) (*bool, [][]string, []FolderDiff, []FileChange, err
 
 	// 2. 각 폴더에 대해 파일 비교
 	for _, folder := range folders {
-		// 파일 비교
 		filesMatch, files, fileChanges, err := CompareFiles(db, folder.Path, gConfig.Exclusions)
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, err
 		}
-		// 해당 폴더에 파일이 다르다면 변경 내역에 추가
 		if !filesMatch {
 			allFileChanges = append(allFileChanges, fileChanges...)
 		}
 
-		// 폴더의 파일 목록을 추출하여 folderFiles 저장
 		fileNames := ExtractFileNames(files)
-		// folder.Path 를 key(첫번째 요소)로, 나머지 파일 이름들을 값으로 저장
 		folderFiles = append(folderFiles, append([]string{folder.Path}, fileNames...))
 	}
 
-	// 전체 동일 여부 결정: 폴더 차이와 파일 변경 내역이 없으면 true, 아니면 false
-	overallSame := len(folderDiffs) == 0 && len(allFileChanges) == 0
-	if overallSame {
-		return u.PTrue, folderFiles, nil, nil, nil
+	// 전체 동일 여부 판단: folderDiffs 와 allFileChanges 가 모두 비어 있으면 동일
+	if len(folderDiffs) == 0 && len(allFileChanges) == 0 {
+		return folderFiles, nil, nil, nil
 	}
-	return u.PFalse, folderFiles, folderDiffs, allFileChanges, nil
+
+	return folderFiles, folderDiffs, allFileChanges, nil
 }
 
-// UpdateFilesAndFolders 폴더 변경 내역과 파일 변경 내역을 DB에 반영
-func UpdateFilesAndFolders(ctx context.Context, db *sql.DB, diffs []FolderDiff, changes []FileChange) error {
+// UpdateDB 폴더 변경 내역과 파일 변경 내역을 DB에 반영
+func UpdateDB(ctx context.Context, db *sql.DB, diffs []FolderDiff, changes []FileChange) error {
 	// 폴더 변경 업데이트
 	if err := UpsertFolders(ctx, db, diffs); err != nil {
 		return err
