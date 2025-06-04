@@ -1,15 +1,13 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/seoyhaein/tori/api"
 	c "github.com/seoyhaein/tori/config"
 	d "github.com/seoyhaein/tori/db"
 	globallog "github.com/seoyhaein/tori/log"
-	"github.com/seoyhaein/tori/v1rpc"
-	"github.com/seoyhaein/tori/v1rpc/server"
 	"os"
 	"path"
 	"path/filepath"
@@ -34,14 +32,14 @@ func init() {
 		logger.Fatalf("fail to initialize sqlite3 %v", dbErr)
 	}
 
-	//grpc 서버 시작.
-	server.Address = ":50053"
+	//grpc 서버 시작. TODO 일단 주석 처리함, 이거 주석 해제해야 함.
+	/*server.Address = ":50053"
 	// gRPC 서버를 별도 고루틴에서 실행하고, 종료 에러를 받을 채널 생성
 	serverErrCh = make(chan error, 1)
 	go func() {
 		err := server.Server()
 		serverErrCh <- err
-	}()
+	}()*/
 
 }
 
@@ -57,8 +55,8 @@ func main() {
 		}
 	}()
 
-	// TODO 확인하자.
-	Shutdown()
+	// TODO 확인하자. 주석 처리함. 주석 해제 해야함.
+	//Shutdown()
 
 	// 테스트로 빈파일 생성
 	// 기존 파일이 생성되어 있을 경우 권한 설정을 안해줌. 버그지만 고치지 않음.
@@ -72,10 +70,10 @@ func main() {
 		d.MakeTestFilesA("/test/baba/")
 	}
 
-	ctx := context.Background()
-
-	dpb, _ := v1rpc.LoadDataBlock(outputDatablock)
-	v1rpc.SaveDataBlockToTextFile("/test/datablock.txt", dpb)
+	//ctx := context.Background()
+	outputDatablock := filepath.Join(gConfig.RootDir, "datablock.pb")
+	dpb, _ := api.LoadDataBlock(outputDatablock)
+	api.SaveDataBlockToTextFile("/test/datablock.txt", dpb)
 
 }
 
