@@ -188,6 +188,10 @@ type FolderDiff struct {
 }
 
 // FileChange 는 특정 Folder 내에서 디스크와 DB의 파일 정보가 다를 경우 그 차이를 나타냄.
+// TODO 여기에다가 Path 하나 넣어 두자. 왜냐하면 어디에 있는 파일이 변경되었는지 파악해야 함으로.
+// 이 Path 를 통해서 Folder 테이블을 검색할 수 있음.
+// 지금 키가 되는 FileId, FolderId 자체가 들어가지 않으니, 이건 FileChange 만들때 그냥 빈공가느로 남겨두자, 향후 쓰일 수도 있으니. Ptah 를 넣자.
+// DB 자체를 건드는게 아님. 중요.
 type FileChange struct {
 	ChangeType string // "added", "removed", "modified"
 	// DB에 이미 존재하는 파일의 경우 FileID와 FolderID를 기록합니다.
@@ -848,22 +852,59 @@ func CompareFiles(db *sql.DB, folderPath string, filesExclusions []string) (bool
 }
 
 // UpsertFolder FolderDiff 정보를 기반으로 DB의 폴더 정보를 업데이트하거나, 없으면 삽입
+// TODO 수정해줘야 함 리턴에 수정된 FolderDiff 해줘야 함.
 func (fd *FolderDiff) UpsertFolder(ctx context.Context, db *sql.DB) error {
-	if fd.FolderID == 0 {
-		// DB에 해당 폴더 정보가 없는 경우: 새 레코드 삽입 (FolderID는 추후 별도 조회로 반영 가능)
+	// 1) path 로 이미 존재하는 folders.id를 조회
+	id, err := getFolderID(db, fd.Path)
+	if errors.Is(err, sql.ErrNoRows) {
+		// 아직 DB에 없는 폴더 → INSERT
 		if err := execSQL(ctx, db, "insert_folder.sql", fd.Path, fd.DiskTotalSize, fd.DiskFileCount); err != nil {
 			return fmt.Errorf("failed to insert folder for path %s: %w", fd.Path, err)
 		}
-	} else {
-		// DB에 해당 폴더 정보가 있는 경우: 업데이트
-		if err := execSQL(ctx, db, "update_folder.sql", fd.DiskTotalSize, fd.DiskFileCount, fd.FolderID); err != nil {
-			return fmt.Errorf("failed to update folder id %d, path %s: %w", fd.FolderID, fd.Path, err)
+		// INSERT 후, 다시 id 조회
+		id, err = getFolderID(db, fd.Path)
+		if err != nil {
+			return fmt.Errorf("failed to fetch folder id after insert (path=%s): %w", fd.Path, err)
 		}
+	} else if err != nil {
+		// 조회 도중 다른 에러 발생
+		return fmt.Errorf("failed to query folder id for path %s: %w", fd.Path, err)
 	}
+
+	// 2) id 에는 반드시 folders.id가 들어 있으므로 UPDATE
+	if err := execSQL(ctx, db, "update_folder.sql", fd.DiskTotalSize, fd.DiskFileCount, id); err != nil {
+		return fmt.Errorf("failed to update folder id %d, path %s: %w", id, fd.Path, err)
+	}
+
+	// 3) FolderID 필드에 실제 id를 저장
+	fd.FolderID = id
 	return nil
 }
 
+func getFolderID(db *sql.DB, path string) (int64, error) {
+	rows, err := querySQLNoCtx(db, "get_folder_id.sql", path)
+	if err != nil {
+		return 0, fmt.Errorf("querySQLNoCtx failed (get_folder_id.sql): %w", err)
+	}
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			logger.Warnf("failed to close rows: %v", err)
+		}
+	}(rows)
+
+	if !rows.Next() {
+		return 0, sql.ErrNoRows
+	}
+	var id int64
+	if err := rows.Scan(&id); err != nil {
+		return 0, fmt.Errorf("failed to scan folder id: %w", err)
+	}
+	return id, nil
+}
+
 // UpsertFolders FolderDiff 슬라이스에 대해 DB 업데이트(업서트)를 수행.
+// TODO 이거 수정해줘야 함. 리턴에서 []FolderDiff 해줘야함. diff.UpsertFolder 에서 업데이트 된 folder_id 가 들어간 folderdiff 를 받아서 []folderdiff 를 리턴해줘야 함.
 func UpsertFolders(ctx context.Context, db *sql.DB, diffs []FolderDiff) error {
 	for _, diff := range diffs {
 		if err := diff.UpsertFolder(ctx, db); err != nil {
@@ -873,7 +914,10 @@ func UpsertFolders(ctx context.Context, db *sql.DB, diffs []FolderDiff) error {
 	return nil
 }
 
+// TODO 오류있음 수정해줘야 함.
+
 // UpsertDelFile FileChange 정보를 기반으로 DB의 파일 정보를 업데이트하거나, 없으면 삽입 또는 삭제.
+// folder_id 를 집어 넣어서 간단히 처리하자. folder_id 로 files 의 id 를 찾아올 수 있음. // TODO 이거 수정하자.
 func (fc *FileChange) UpsertDelFile(ctx context.Context, db *sql.DB) error {
 	switch fc.ChangeType {
 	case "added":
@@ -881,11 +925,11 @@ func (fc *FileChange) UpsertDelFile(ctx context.Context, db *sql.DB) error {
 			return fmt.Errorf("failed to insert file %s: %w", fc.Name, err)
 		}
 	case "modified":
-		if err := execSQL(ctx, db, "update_files.sql", fc.DiskSize, fc.FileID); err != nil {
+		if err := execSQL(ctx, db, "update_file.sql", fc.DiskSize, fc.FileID); err != nil {
 			return fmt.Errorf("failed to update file %s: %w", fc.Name, err)
 		}
 	case "removed":
-		if err := execSQL(ctx, db, "delete_files.sql", fc.FileID); err != nil {
+		if err := execSQL(ctx, db, "delete_file.sql", fc.FileID); err != nil {
 			return fmt.Errorf("failed to delete file %s: %w", fc.Name, err)
 		}
 	default:
@@ -893,6 +937,8 @@ func (fc *FileChange) UpsertDelFile(ctx context.Context, db *sql.DB) error {
 	}
 	return nil
 }
+
+// UpsertDelFiles 전에 []FileChange 에 folder_id 와 file id 를 채워 넣는 과정이 필요하다.
 
 // UpsertDelFiles FileChange 슬라이스에 대해 DB 업데이트(업서트)를 수행.
 func UpsertDelFiles(ctx context.Context, db *sql.DB, changes []FileChange) error {

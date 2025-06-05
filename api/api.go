@@ -124,6 +124,73 @@ func GenerateFileBlockFromDir(dirPath string) (*pb.FileBlock, error) {
 	return fb, nil
 }
 
+// SaveFolders 폴더 정보를 DB에 저장, TODO 이건 한번만 실행되어야 하는 메서드 임. 이름을 이러한 맥락을 고려해서 넣어 주어야 할듯, 아래 구현되어 있는 메서드들도 이름 수정해줘야 할듯.
+func (f *DataBlockServiceServerImpl) SaveFolders(ctx context.Context) error {
+	err := dbUtils.SaveFolders(ctx, f.db, f.cfg.RootDir, nil, f.cfg.Exclusions)
+	return err
+}
+
+// SyncFolders 업데이트가 이루어졌으면 true, 그렇지 않으면 false
+func (f *DataBlockServiceServerImpl) SyncFolders(ctx context.Context) (bool, error) {
+	// 1) DiffFolders 호출
+	folderFiles, fDiff, fChange, err := dbUtils.DiffFolders(f.db)
+	if err != nil {
+		logger.Errorf("DiffFolders 실패: %v", err)
+		return false, err
+	}
+
+	// 2) datablock.pb 경로 준비
+	outputDatablock := filepath.Join(f.cfg.RootDir, "datablock.pb")
+	_, statErr := os.Stat(outputDatablock)
+	firstRun := os.IsNotExist(statErr) // 파일이 없으면 최초 실행으로 간주
+
+	// 3) “업데이트가 필요한지” 판정
+	//    - pb 파일이 없으면 무조건 생성
+	//    - pb 파일이 있는데, fDiff/fChange가 둘 다 nil이 아니면(=변경 발생) 생성
+	needsUpdate := firstRun || !(fDiff == nil && fChange == nil)
+
+	if !needsUpdate {
+		logger.Info("all files and folders are same & datablock.pb exists; skipping update.")
+		return false, nil
+	}
+
+	// 4) DB 업데이트(최초 실행에도, DB 자체엔 이미 저장된 상태라면 UpdateDB에 걸리지 않음)
+	// TODO UpdateDB 여기 에러 있음.
+	if fDiff != nil || fChange != nil {
+		if err := dbUtils.UpdateDB(ctx, f.db, fDiff, fChange); err != nil {
+			logger.Errorf("UpdateDB 실패: %v", err)
+			return false, err
+		}
+		if ctx.Err() != nil {
+			logger.Warnf("SyncFolders 종료: 컨텍스트 취소 감지 (%v)", ctx.Err())
+			return false, ctx.Err()
+		}
+	}
+
+	// 5) FileBlock 생성
+	fbs, err := GenerateFBs(folderFiles)
+	if err != nil {
+		logger.Errorf("GenerateFBs 실패: %v", err)
+		return false, err
+	}
+	if ctx.Err() != nil {
+		logger.Warnf("SyncFolders 종료: 컨텍스트 취소 감지 (%v)", ctx.Err())
+		return false, ctx.Err()
+	}
+
+	// 6) DataBlock 저장 (항상 새로 쓰기)
+	if err := GenerateDataBlock(fbs, outputDatablock); err != nil {
+		logger.Errorf("GenerateDataBlock 실패 (%s): %v", outputDatablock, err)
+		return false, err
+	}
+	if ctx.Err() != nil {
+		logger.Warnf("SyncFolders 완료 이후 컨텍스트 취소 감지 (%v)", ctx.Err())
+		return false, ctx.Err()
+	}
+
+	return true, nil
+}
+
 // GenerateFileBlock 일단 이름 고침. filePath 는 rule.josn 이 있는 위치이자 fileblock.csv, invalid_files, *.pb 파일 등이 가 저장될 위치.
 func GenerateFileBlock(filePath string, files []string) (*pb.FileBlock, error) {
 	// Load the rule set
@@ -164,65 +231,6 @@ func GenerateFileBlock(filePath string, files []string) (*pb.FileBlock, error) {
 	}
 
 	return fbd, nil
-}
-
-// SaveFolders 폴더 정보를 DB에 저장, TODO 이건 한번만 실행되어야 하는 메서드 임. 이름을 이러한 맥락을 고려해서 넣어 주어야 할듯, 아래 구현되어 있는 메서드들도 이름 수정해줘야 할듯.
-func (f *DataBlockServiceServerImpl) SaveFolders(ctx context.Context) error {
-	err := dbUtils.SaveFolders(ctx, f.db, f.cfg.RootDir, nil, f.cfg.Exclusions)
-	return err
-}
-
-// SyncFolders 업데이트가 이루어졌으면 true, 그렇지 않으면 false
-func (f *DataBlockServiceServerImpl) SyncFolders(ctx context.Context) (bool, error) {
-	// 1) DiffFolders 호출
-	folderFiles, fDiff, fChange, err := dbUtils.DiffFolders(f.db)
-	if err != nil {
-		logger.Errorf("DiffFolders 실패: %v", err)
-		return false, err
-	}
-
-	// 2) 변경 없음 시 바로 반환 (FileBlock/DB 업데이트 생략)
-	if fDiff == nil && fChange == nil {
-		logger.Info("all files and folders are same; skipping update and DataBlock generation.")
-		return true, nil
-	}
-
-	// 3) DB 업데이트
-	if err = dbUtils.UpdateDB(ctx, f.db, fDiff, fChange); err != nil {
-		logger.Errorf("UpdateDB 실패: %v", err)
-		return false, err
-	}
-	// 컨텍스트 취소 여부 확인
-	if ctx.Err() != nil {
-		logger.Warnf("SyncFolders 종료: 컨텍스트 취소 감지 (%v)", ctx.Err())
-		return false, ctx.Err()
-	}
-
-	// 4) FileBlock 생성
-	fbs, err := GenerateFBs(folderFiles)
-	if err != nil {
-		logger.Errorf("GenerateFBs 실패: %v", err)
-		return false, err
-	}
-	// 컨텍스트 취소 여부 재확인
-	if ctx.Err() != nil {
-		logger.Warnf("SyncFolders 종료: 컨텍스트 취소 감지 (%v)", ctx.Err())
-		return false, ctx.Err()
-	}
-
-	// 5) DataBlock 저장
-	outputDatablock := filepath.Join(f.cfg.RootDir, "datablock.pb")
-	if err = GenerateDataBlock(fbs, outputDatablock); err != nil {
-		logger.Errorf("GenerateDataBlock 실패 (%s): %v", outputDatablock, err)
-		return false, err
-	}
-	// 최종 컨텍스트 취소 여부 확인
-	if ctx.Err() != nil {
-		logger.Warnf("SyncFolders 완료 이후 컨텍스트 취소 감지 (%v)", ctx.Err())
-		return false, ctx.Err()
-	}
-
-	return true, nil
 }
 
 // GenerateFBs
