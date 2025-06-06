@@ -167,6 +167,7 @@ type File struct {
 	Name        string `db:"name"`
 	Size        int64  `db:"size"`
 	CreatedTime string `db:"created_time"` // sting 으로 해도 충분
+	Path        string `db:"-"`            // DB 매핑에서 완전히 제외
 }
 
 type Folder struct {
@@ -200,6 +201,7 @@ type FileChange struct {
 	Name     string // 파일 이름
 	DiskSize int64  // 디스크상의 파일 크기
 	DBSize   int64  // DB에 저장된 파일 크기 (추가된 경우 0)
+	Path     string // 파일이 속한 폴더의 경로
 }
 
 // db 관련
@@ -348,8 +350,6 @@ func querySQLNoCtx(db *sql.DB, fileName string, args ...interface{}) (*sql.Rows,
 	return querySQL(context.Background(), db, fileName, args...)
 }
 
-// 외부 사용 메서드
-
 // StoreFilesFolderInfo 폴더 경로를 받아 폴더 내 파일 정보를 DB에 삽입하는 함수, TODO 한번만 실행되고 말아야 함. 이름 수정하자.
 func StoreFilesFolderInfo(ctx context.Context, db *sql.DB, folderPath string, exclusions []string) error {
 	if ctx == nil {
@@ -497,9 +497,6 @@ func GetCurrentFolderFileInfo(dirPath string, exclusions []string) (Folder, []Fi
 		if excludeFiles(fileName, exclusions) {
 			continue
 		}
-		/*if u.ExcludeFiles(fileName, exclusions) {
-			continue
-		}*/
 
 		// 파일 전체 경로 생성
 		filePath := filepath.Join(dirPath, fileName)
@@ -522,6 +519,7 @@ func GetCurrentFolderFileInfo(dirPath string, exclusions []string) (Folder, []Fi
 			Name:        fileName,
 			Size:        size,
 			CreatedTime: info.ModTime().Format("2006-01-02 15:04:05"),
+			Path:        dirPath, // Path 필드에 실제 파일 경로를 채움
 		}
 		files = append(files, fileRecord)
 	}
@@ -726,8 +724,6 @@ func GetFilesByPathFromDB(db *sql.DB, folderPath string) (files []File, err erro
 	return files, err
 }
 
-// 비교 메서드
-
 // CompareFolders 디스크와 DB의 폴더 정보를 비교하여 변경 사항이 있는지 확인함.
 func CompareFolders(db *sql.DB, rootPath string, foldersExclusions, filesExclusions []string) (bool, []Folder, []FolderDiff, error) {
 	// 디스크에서 서브 폴더 목록 조회
@@ -758,6 +754,7 @@ func CompareFolders(db *sql.DB, rootPath string, foldersExclusions, filesExclusi
 
 		if dbFolder, ok := dbFolderMap[diskFolder.Path]; !ok {
 			// DB에 해당 폴더 정보가 없는 경우 FolderID를 0으로 처리
+
 			diffs = append(diffs, FolderDiff{
 				FolderID:      0,
 				Path:          diskFolder.Path,
@@ -777,6 +774,7 @@ func CompareFolders(db *sql.DB, rootPath string, foldersExclusions, filesExclusi
 					DiskFileCount: updatedFolder.FileCount,
 					DBFileCount:   dbFolder.FileCount,
 				})
+
 			}
 		}
 	}
@@ -819,6 +817,7 @@ func CompareFiles(db *sql.DB, folderPath string, filesExclusions []string) (bool
 				Name:       name,
 				DiskSize:   diskF.Size,
 				DBSize:     0,
+				Path:       diskF.Path,
 			})
 		} else {
 			// 파일 이름은 동일하지만 크기가 다른 경우 (수정된 파일)
@@ -830,11 +829,12 @@ func CompareFiles(db *sql.DB, folderPath string, filesExclusions []string) (bool
 					Name:       name,
 					DiskSize:   diskF.Size,
 					DBSize:     dbF.Size,
+					Path:       diskF.Path,
 				})
 			}
 		}
 	}
-	// DB 에만 있는 파일 (삭제된 파일)
+	// DB 에만 있는 파일 (삭제된 파일), Path 가 없음. 실제로 없으므로.
 	for name, dbF := range dbMap {
 		if _, ok := diskMap[name]; !ok {
 			changes = append(changes, FileChange{
@@ -844,6 +844,7 @@ func CompareFiles(db *sql.DB, folderPath string, filesExclusions []string) (bool
 				Name:       name,
 				DiskSize:   0,
 				DBSize:     dbF.Size,
+				Path:       "",
 			})
 		}
 	}
@@ -852,32 +853,18 @@ func CompareFiles(db *sql.DB, folderPath string, filesExclusions []string) (bool
 }
 
 // UpsertFolder FolderDiff 정보를 기반으로 DB의 폴더 정보를 업데이트하거나, 없으면 삽입
-// TODO 수정해줘야 함 리턴에 수정된 FolderDiff 해줘야 함.
 func (fd *FolderDiff) UpsertFolder(ctx context.Context, db *sql.DB) error {
-	// 1) path 로 이미 존재하는 folders.id를 조회
-	id, err := getFolderID(db, fd.Path)
-	if errors.Is(err, sql.ErrNoRows) {
-		// 아직 DB에 없는 폴더 → INSERT
+	if fd.FolderID == 0 {
+		// DB에 해당 폴더 정보가 없는 경우: 새 레코드 삽입 (FolderID는 추후 별도 조회로 반영 가능)
 		if err := execSQL(ctx, db, "insert_folder.sql", fd.Path, fd.DiskTotalSize, fd.DiskFileCount); err != nil {
 			return fmt.Errorf("failed to insert folder for path %s: %w", fd.Path, err)
 		}
-		// INSERT 후, 다시 id 조회
-		id, err = getFolderID(db, fd.Path)
-		if err != nil {
-			return fmt.Errorf("failed to fetch folder id after insert (path=%s): %w", fd.Path, err)
+	} else {
+		// DB에 해당 폴더 정보가 있는 경우: 업데이트
+		if err := execSQL(ctx, db, "update_folder.sql", fd.DiskTotalSize, fd.DiskFileCount, fd.FolderID); err != nil {
+			return fmt.Errorf("failed to update folder id %d, path %s: %w", fd.FolderID, fd.Path, err)
 		}
-	} else if err != nil {
-		// 조회 도중 다른 에러 발생
-		return fmt.Errorf("failed to query folder id for path %s: %w", fd.Path, err)
 	}
-
-	// 2) id 에는 반드시 folders.id가 들어 있으므로 UPDATE
-	if err := execSQL(ctx, db, "update_folder.sql", fd.DiskTotalSize, fd.DiskFileCount, id); err != nil {
-		return fmt.Errorf("failed to update folder id %d, path %s: %w", id, fd.Path, err)
-	}
-
-	// 3) FolderID 필드에 실제 id를 저장
-	fd.FolderID = id
 	return nil
 }
 
@@ -904,7 +891,6 @@ func getFolderID(db *sql.DB, path string) (int64, error) {
 }
 
 // UpsertFolders FolderDiff 슬라이스에 대해 DB 업데이트(업서트)를 수행.
-// TODO 이거 수정해줘야 함. 리턴에서 []FolderDiff 해줘야함. diff.UpsertFolder 에서 업데이트 된 folder_id 가 들어간 folderdiff 를 받아서 []folderdiff 를 리턴해줘야 함.
 func UpsertFolders(ctx context.Context, db *sql.DB, diffs []FolderDiff) error {
 	for _, diff := range diffs {
 		if err := diff.UpsertFolder(ctx, db); err != nil {
@@ -914,10 +900,7 @@ func UpsertFolders(ctx context.Context, db *sql.DB, diffs []FolderDiff) error {
 	return nil
 }
 
-// TODO 오류있음 수정해줘야 함.
-
 // UpsertDelFile FileChange 정보를 기반으로 DB의 파일 정보를 업데이트하거나, 없으면 삽입 또는 삭제.
-// folder_id 를 집어 넣어서 간단히 처리하자. folder_id 로 files 의 id 를 찾아올 수 있음. // TODO 이거 수정하자.
 func (fc *FileChange) UpsertDelFile(ctx context.Context, db *sql.DB) error {
 	switch fc.ChangeType {
 	case "added":
@@ -979,7 +962,7 @@ func ExtractFileNames(files []File) []string {
 
 // DiffFolders 폴더 파일 비교
 func DiffFolders(db *sql.DB) ([][]string, []FolderDiff, []FileChange, error) {
-	// 1. 폴더 비교: 폴더 목록과 폴더 간 차이 정보를 가져옴
+	// 1. 폴더 비교: 디스크 폴더들과 db의 폴더 목록을 비교
 	_, folders, folderDiffs, err := CompareFolders(db, gConfig.RootDir, nil, gConfig.Exclusions)
 	if err != nil {
 		return nil, nil, nil, err
@@ -1018,91 +1001,17 @@ func UpdateDB(ctx context.Context, db *sql.DB, diffs []FolderDiff, changes []Fil
 	if err := UpsertFolders(ctx, db, diffs); err != nil {
 		return err
 	}
-	// 파일 변경 업데이트
+	// UpsertFolders 해줘야지만, db 에 folderId 가 생겨서 검색할 수 가 있음.
+	for i := range changes {
+		folderId, err := getFolderID(db, changes[i].Path)
+		if err != nil {
+			return fmt.Errorf("failed to get folder ID for path %q: %w", changes[i].Path, err)
+		}
+		changes[i].FolderID = folderId
+	}
+	// 파일 변경 업데이트,
 	if err := UpsertDelFiles(ctx, db, changes); err != nil {
 		return err
 	}
 	return nil
 }
-
-// CompareFoldersAndFiles 폴더와 파일을 비교하고, 변경 내역을 반환 TODO 수정해야 함 버그 있음. 분리한 메서드가 안정적일 경우 삭제 보관. 아직 지우지 말것. 파일 체크하는 것 구현 안된것 같음.
-/*func (f *dBApisImpl) CompareFoldersAndFiles(ctx context.Context, db *sql.DB) (*bool, []d.FolderDiff, []d.FileChange, []*pb.FileBlock, error) {
-	// 1. 폴더 비교: 폴더 목록과 폴더 간 차이 정보를 가져옴
-	_, folders, folderDiffs, err := d.CompareFolders(db, gConfig.RootDir, nil, gConfig.Exclusions)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-
-	var allFileChanges []d.FileChange
-	var fbs []*pb.FileBlock // 파일 블록 데이터 슬라이스
-
-	// 2. 각 폴더에 대해 파일 비교
-	for _, folder := range folders {
-		// 파일 비교
-		filesMatch, files, fileChanges, err := d.CompareFiles(db, folder.Path, gConfig.Exclusions)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-		// 해당 폴더에 파일이 다르다면 변경 내역에 추가
-		if !filesMatch {
-			allFileChanges = append(allFileChanges, fileChanges...)
-		} else {
-			// 파일과 폴더가 db와 동일한 경우, 특수 파일 존재 여부를 확인
-
-			// rule.json 파일이 없으면 에러 리턴
-			ruleExists, err := FileExistsExact(folder.Path, "rule.json")
-			if !ruleExists {
-				return nil, nil, nil, nil, fmt.Errorf("required file rule.json does not exist in folder %s", folder.Path)
-			}
-			if err != nil {
-				return nil, nil, nil, nil, err
-			}
-
-			// fileblock.csv 존재 여부 확인
-			bfb, err := FileExistsExact(folder.Path, "fileblock.csv")
-			if err != nil {
-				return nil, nil, nil, nil, err
-			}
-
-			// *.pb 존재 여부 확인
-			pbs, err := SearchFilesByPattern(folder.Path, "*.pb")
-			if err != nil {
-				return nil, nil, nil, nil, err
-			}
-
-			// 만약 pb 파일이 여러 개이면 삭제 후 빈 슬라이스로 초기화
-			if len(pbs) > 1 {
-				if err = DeleteFiles(pbs); err != nil {
-					return nil, nil, nil, nil, err
-				}
-				pbs = []string{}
-			}
-
-			// rule.json 있고, fileblock.csv 있으며, 정확히 하나의 pb 파일이 있으면 기존 파일 블록 로드
-			if bfb && len(pbs) == 1 {
-				pbPath := pbs[0]
-				fb, err := v1rpc.LoadFileBlock(pbPath)
-				if err != nil {
-					return nil, nil, nil, nil, err
-				}
-				fbs = append(fbs, fb)
-				continue
-			}
-
-			// []Files 를 []string(파일 이름 목록)으로 변환 후, 새 파일 블록 생성
-			fileNames := d.ExtractFileNames(files)
-			fb, err := v1rpc.GenerateFileBlock(folder.Path, fileNames)
-			if err != nil {
-				return nil, nil, nil, nil, err
-			}
-			fbs = append(fbs, fb)
-		}
-	}
-
-	// 전체 동일 여부 결정: 폴더 차이와 파일 변경 내역이 없으면 true, 아니면 false
-	overallSame := len(folderDiffs) == 0 && len(allFileChanges) == 0
-	if overallSame {
-		return u.PTrue, nil, nil, fbs, nil
-	}
-	return u.PFalse, folderDiffs, allFileChanges, fbs, nil
-}*/
