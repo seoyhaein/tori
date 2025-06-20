@@ -17,9 +17,10 @@ var (
 	cfg      = c.GlobalConfig
 	logger   = globallog.Log
 	database *sql.DB
+	cliSvc   *service.DataBlockCliService
 )
 
-// Execute 는 Cobra 루트 커맨드를 실행합니다.
+// Execute 는 Cobra 루트 커맨드 실행
 func Execute() error {
 	root := &cobra.Command{
 		Use:   "tori-admin",
@@ -33,6 +34,8 @@ func Execute() error {
 			if err := dbUtils.InitializeDatabase(database); err != nil {
 				return fmt.Errorf("DB 초기화 실패: %w", err)
 			}
+			// cfg 는 config.go 에서 init 에서 생성됨.
+			cliSvc = service.NewDataBlockCliService(database, cfg)
 			return nil
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
@@ -113,7 +116,7 @@ func snapshotCmd() *cobra.Command {
 		Use:   "snapshot",
 		Short: "폴더 구조를 DB에 스냅샷 저장",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := dbUtils.SaveFolders(cmd.Context(), database, cfg.RootDir, cfg.FoldersExclusions, cfg.FilesExclusions); err != nil {
+			if err := cliSvc.SaveFolders(cmd.Context()); err != nil {
 				return fmt.Errorf("스냅샷 저장 실패: %w", err)
 			}
 			logger.Info("폴더 구조 스냅샷 저장 완료")
@@ -128,7 +131,7 @@ func syncCmd() *cobra.Command {
 		Use:   "sync",
 		Short: "스냅샷과 실제 폴더 비교 및 동기화",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			updated, err := service.SyncFolders(cmd.Context())
+			updated, err := cliSvc.SyncFolders(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("동기화 실패: %w", err)
 			}

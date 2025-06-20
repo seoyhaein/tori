@@ -304,112 +304,6 @@ func GetFoldersInfo(rootPath string, exclusions []string) ([]Folder, error) {
 	return folders, nil
 }
 
-// DB 메서드
-
-// GetFoldersFromDB DB의 폴더 정보를 조회하여 Folder 구조체 슬라이스로 반환함.
-// IMPORTANT: 호출자가 반환된 rows 를 직접 Close() 할 필요는 없음. 내부에서 모두 처리됨.
-func GetFoldersFromDB(db *sql.DB) (folders []Folder, err error) {
-	// "select_folders.sql" 파일에 정의된 SELECT 쿼리를 실행하여 폴더 정보를 조회
-	rows, err := querySQLNoCtx(db, "select_folders.sql")
-	if err != nil {
-		return nil, fmt.Errorf("failed to query folders: %w", err)
-	}
-	//defer rows.Close()
-	defer func() {
-		if cErr := rows.Close(); cErr != nil {
-			if err == nil {
-				err = fmt.Errorf("failed to close rows: %w", cErr)
-			} else {
-				err = fmt.Errorf("%v; failed to close rows: %w", err, cErr)
-			}
-		}
-	}()
-
-	// 각 행을 순회하면서 Folder 구조체에 스캔
-	for rows.Next() {
-		var f Folder
-		err = rows.Scan(&f.ID, &f.Path, &f.TotalSize, &f.FileCount, &f.CreatedTime)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan folder: %w", err)
-		}
-		folders = append(folders, f)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows error: %w", err)
-	}
-
-	return folders, nil
-}
-
-// GetFilesFromDB DB의 파일 정보를 조회하여 File 구조체 슬라이스로 반환함.
-// IMPORTANT: 호출자가 반환된 rows 를 직접 Close() 할 필요는 없음. 내부에서 모두 처리됨.
-func GetFilesFromDB(db *sql.DB) (files []File, err error) {
-	// "select_files.sql" 파일에 정의된 SELECT 쿼리를 실행하여 파일 정보를 조회
-	rows, err := querySQLNoCtx(db, "select_files.sql")
-	if err != nil {
-		return nil, fmt.Errorf("failed to query files: %w", err)
-	}
-
-	defer func() {
-		if cErr := rows.Close(); cErr != nil {
-			if err == nil {
-				err = fmt.Errorf("failed to close rows: %w", cErr)
-			} else {
-				err = fmt.Errorf("%v; failed to close rows: %w", err, cErr)
-			}
-		}
-	}()
-
-	// 각 행을 순회하면서 File 구조체에 스캔
-	for rows.Next() {
-		var f File
-		err = rows.Scan(&f.ID, &f.FolderID, &f.Name, &f.Size, &f.CreatedTime)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan file: %w", err)
-		}
-		files = append(files, f)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows error: %w", err)
-	}
-
-	return files, nil
-}
-
-// GetFilesByPathFromDB 는 주어진 Folder 경로에 해당하는 파일 정보를 DB 에서 조회함.
-// IMPORTANT: SQL 쿼리는 "queries/select_files_for_folder.sql" 파일에 분리되어 있음.
-func GetFilesByPathFromDB(db *sql.DB, folderPath string) (files []File, err error) {
-	// "select_files_for_folder.sql" 파일에 정의된 쿼리를 실행하여 파일 정보를 조회
-	rows, err := querySQLNoCtx(db, "select_files_for_folder.sql", folderPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query files for folder %s: %w", folderPath, err)
-	}
-
-	defer func() {
-		if cErr := rows.Close(); cErr != nil {
-			if err == nil {
-				err = fmt.Errorf("failed to close rows: %w", cErr)
-			} else {
-				err = fmt.Errorf("%v; failed to close rows: %w", err, cErr)
-			}
-		}
-	}()
-
-	for rows.Next() {
-		var f File
-		if err := rows.Scan(&f.ID, &f.FolderID, &f.Name, &f.Size, &f.CreatedTime); err != nil {
-			return nil, fmt.Errorf("failed to scan file for folder %s: %w", folderPath, err)
-		}
-		files = append(files, f)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows error for folder %s: %w", folderPath, err)
-	}
-	return files, err
-}
-
 // DeleteFiles 전달받은 파일 경로 목록에서 2개 이상의 파일이 존재하면 모두 삭제
 func DeleteFiles(files []string) error {
 	if len(files) > 1 {
@@ -462,4 +356,13 @@ func FileExistsExact(folder, fileName string) (bool, error) {
 	} else {
 		return false, fmt.Errorf("파일 체크 실패 (%s): %w", path, err)
 	}
+}
+
+// ExtractFileNames 변환.
+func ExtractFileNames(files []File) []string {
+	names := make([]string, 0, len(files))
+	for _, f := range files {
+		names = append(names, f.Name)
+	}
+	return names
 }

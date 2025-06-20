@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 )
 
-// SyncFolders 는 DB 스냅샷 비교부터 DataBlock 파일 생성까지 모두 처리합니다.
-func SyncFolders(ctx context.Context, db *sql.DB, rootPath string, filesExclusions []string) (bool, error) {
+// SyncFolders 는 DB 스냅샷 비교부터 DataBlock 파일 생성까지 모두 처리 TODO SyncFolders, DiffFolders 들ㅇ가는 입력 파라미터 수정할 필요 있음.
+func SyncFolders(ctx context.Context, db *sql.DB, rootPath string, foldersExclusions, filesExclusions []string) (bool, error) {
 	// 1) DiffFolders 호출
-	folderFiles, fDiff, fChange, err := DiffFolders(db)
+	folderFiles, fDiff, fChange, err := DiffFolders(db, rootPath, foldersExclusions, filesExclusions)
 	if err != nil {
 		globallog.Log.Errorf("DiffFolders 실패: %v", err)
 		return false, err
