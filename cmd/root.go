@@ -20,6 +20,9 @@ var (
 	cliSvc   *service.DataBlockCliService
 )
 
+// TODO 명령어 시나리오 완성하자. 최대한 단순하게 자동화 되도록 하자.
+// TODO 버그 나오는 것도 확인할 수 있도록 해야한다. bori 참고해서 만들도록 한다.
+
 // Execute 는 Cobra 루트 커맨드 실행
 func Execute() error {
 	root := &cobra.Command{
