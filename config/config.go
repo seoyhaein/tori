@@ -10,8 +10,9 @@ import (
 )
 
 type Config struct {
-	RootDir    string   `json:"rootDir"`    // lustre-client 마운트된 폴더로 사용할 예정.
-	Exclusions []string `json:"exclusions"` // 예: ["*.json", "invalid_files", "*.csv", "*.pb"]
+	RootDir           string   `json:"rootDir"`           // lustre-client 마운트된 폴더로 사용할 예정.
+	FoldersExclusions []string `json:"foldersExclusions"` // 제외할 폴더들.
+	FilesExclusions   []string `json:"filesExclusions"`   // ["*.json", "invalid_files", "*.csv", "*.pb"]
 }
 
 var (
@@ -64,8 +65,8 @@ func LoadConfig(filename string) (cfg *Config, err error) {
 	}
 
 	// Exclusions 가 비어있으면 기본값 설정
-	if len(config.Exclusions) == 0 {
-		config.Exclusions = []string{"*.json", "invalid_files", "*.csv", "*.pb"}
+	if len(config.FilesExclusions) == 0 {
+		config.FilesExclusions = []string{"*.json", "invalid_files", "*.csv", "*.pb"}
 	}
 
 	return &config, nil

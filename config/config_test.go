@@ -26,8 +26,8 @@ func TestLoadConfig(t *testing.T) {
 	if cfg.RootDir != "/tmp" {
 		t.Errorf("RootDir mismatch: %s", cfg.RootDir)
 	}
-	if len(cfg.Exclusions) != 1 || cfg.Exclusions[0] != "*.txt" {
-		t.Errorf("Exclusions mismatch: %v", cfg.Exclusions)
+	if len(cfg.FilesExclusions) != 1 || cfg.FilesExclusions[0] != "*.txt" {
+		t.Errorf("Exclusions mismatch: %v", cfg.FilesExclusions)
 	}
 }
 
@@ -37,7 +37,7 @@ func TestLoadConfig_DefaultExclusions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig error: %v", err)
 	}
-	if len(cfg.Exclusions) == 0 {
+	if len(cfg.FilesExclusions) == 0 {
 		t.Errorf("expected default exclusions")
 	}
 }
